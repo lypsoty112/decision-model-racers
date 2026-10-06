@@ -4,7 +4,8 @@
  * `App` owns the current session (a `Race`, and whether it is the bots-only demo that runs
  * behind the menu), the menu settings, the visible screen, which racer the camera follows, the
  * camera mode, and whether telemetry or the race report is open. `startRace` builds a race from
- * the settings and begins its countdown when `canStart` allows it; `openMenu` pauses a running
+ * the settings and begins its countdown when `canStart` allows it, on the chase camera when you
+ * race and on the TV camera when you spectate; `openMenu` pauses a running
  * race behind the menu and `resume` continues it. If the OpenRouter key turns invalid or runs out
  * of credits during a decision-model race, that race is stopped and replaced by the demo race.
  * Global keys: R respawns the player (`respawnPlayer`), V and Shift+V cycle the followed racer
@@ -91,7 +92,7 @@ export default function App() {
     next.start();
     setSession({ race: next, demo: false });
     setFocusId(settings.participate ? PLAYER_ID : '');
-    if (settings.participate) setCameraMode('chase');
+    setCameraMode(settings.participate ? 'chase' : 'tv');
     setPaused(false);
     setReportOpen(false);
     setScreen('race');

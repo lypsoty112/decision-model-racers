@@ -38,10 +38,12 @@ race ends, a full-screen report compares every racer: result, pace, driving, rac
 decision-model metrics, with position and speed charts, lap times, and a JSON export. The menu's
 "Full report" button reopens it.
 
-Every race starts from a random grid. Each of the eleven bots has a personality, such as Blitz
-the late braker, Echo the slipstream shadow, or Sprocket the careful veteran, that slightly tunes
-its braking, its distance to cars ahead, how fast it changes line, and how tightly it takes
-apexes (`src/game/setup.ts`). Press `T` to see a bot's personality.
+Every race starts from a random grid. Bots ride the slipstream of a car they are catching, then
+commit to the inside of the next corner to pass, and the car being passed gives them room. Each
+of the eleven bots has a personality, such as Blitz the late braker, Echo the slipstream shadow,
+or Sprocket the careful veteran, that slightly tunes its braking, the room it gives cars
+alongside, how fast it changes line, and how tightly it takes apexes (`src/game/setup.ts`).
+Press `T` to see a bot's personality.
 
 ## Racing OpenRouter decision models
 

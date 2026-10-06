@@ -25,7 +25,7 @@ export const CAR_SPEC = {
   grassGrip: 0.7,
   steerGrip: 1.15,
   slipScrub: 6,
-  draftBoost: 0.08,
+  draftBoost: 0.25,
   wheelbase: 2.6,
   maxSteer: 0.55,
   steerRate: 5,

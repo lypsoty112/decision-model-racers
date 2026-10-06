@@ -4,8 +4,8 @@
  * `RaceSettings` is everything the menu configures. `TRACK` is the single circuit, built once and
  * shared by every race. `createRace` fills the grid with the chosen CPU type: `BotDriver`s from
  * the BOTS roster, whose grip and pace rise evenly across the difficulty range from the first
- * bot to the last and are then nudged by each bot's personality along with its braking, berth to
- * cars ahead, line-change, and apex style (unset knobs take STYLE_DEFAULTS), or one
+ * bot to the last and are then nudged by each bot's personality along with its braking, room
+ * given to cars alongside, line-change, and apex style (unset knobs take STYLE_DEFAULTS), or one
  * `ModelDriver` per `ModelEntry` (up to MAX_MODELS entries, at most MAX_COPIES of one model),
  * named "<model> · <style>" with a number added when the same model and style repeat. When
  * `participate` is set, it adds the keyboard racer, and `shuffle` then gives every racer a

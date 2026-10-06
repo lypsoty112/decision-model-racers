@@ -6,7 +6,7 @@
  * sample into a closed ribbon, with u across the profile and v in metres divided by `vScale`;
  * the road, the red-and-white curbs, and the rounded hedges that mark the walls are all sweeps.
  * `canvasTexture` paints the asphalt (speckles, edge lines, dashed centre line) and the
- * chequered start banner. Marker posts every POST_SPACING metres give a strong sense of speed.
+ * chequered start banner, and the karts reuse it for their name tags. Marker posts every POST_SPACING metres give a strong sense of speed.
  */
 import {
   BufferAttribute,
@@ -56,7 +56,7 @@ function sweep(track: Track, profile: [number, number][], vScale: number): Buffe
   return geometry;
 }
 
-function canvasTexture(width: number, height: number, draw: (context: CanvasRenderingContext2D) => void): CanvasTexture {
+export function canvasTexture(width: number, height: number, draw: (context: CanvasRenderingContext2D) => void): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;

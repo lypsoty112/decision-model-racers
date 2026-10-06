@@ -62,7 +62,7 @@ export class GameEngine {
     }
     this.models.clear();
     for (const racer of race.racers) {
-      const model = new CarModel(racer.color);
+      const model = new CarModel(racer.color, racer.name);
       this.models.set(racer.id, model);
       this.scene.add(model.root);
     }

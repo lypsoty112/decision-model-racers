@@ -3,22 +3,45 @@
  *
  * `CarModel` assembles the kart from rounded boxes, spheres, and cylinders: a chassis group
  * (body, nose, wing, seat, driver, spoiler) that rolls, pitches, and kicks out sideways under
- * load, plus wheels that spin with speed while the front pair steers. `update` places the kart
+ * load, plus wheels that spin with speed while the front pair steers, and a camera-facing
+ * `label` sprite showing the racer's name in a pill outlined with their colour, drawn by
+ * `nameTag`. `update` places the kart
  * on the track, eases the body towards poses derived from lateral and longitudinal acceleration,
  * slip, and road grade, and adds a speed-dependent shimmer that grows on grass. `dispose` frees
  * the kart's geometries and materials.
  */
-import { BoxGeometry, Color, CylinderGeometry, Group, type Material, Mesh, SphereGeometry, type BufferGeometry } from 'three';
+import { BoxGeometry, Color, CylinderGeometry, Group, type Material, Mesh, SphereGeometry, Sprite, SpriteMaterial, type BufferGeometry } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CAR_SPEC, type CarState } from '../sim/car';
 import { toonMaterial } from './toon';
+import { canvasTexture } from './trackMesh';
 
 const OUTLINE = 0.0035;
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
+function nameTag(name: string, color: string): SpriteMaterial {
+  const map = canvasTexture(512, 128, (context) => {
+    context.font = '800 60px ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif';
+    const width = Math.min(500, context.measureText(name).width + 80);
+    context.beginPath();
+    context.roundRect((512 - width) / 2, 22, width, 84, 42);
+    context.fillStyle = 'rgba(16, 24, 44, 0.72)';
+    context.fill();
+    context.lineWidth = 6;
+    context.strokeStyle = color;
+    context.stroke();
+    context.fillStyle = '#ffffff';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(name, 256, 66);
+  });
+  return new SpriteMaterial({ map, depthWrite: false });
+}
+
 export class CarModel {
   readonly root = new Group();
+  readonly label: Sprite;
   private readonly chassis = new Group();
   private readonly spinners: Group[] = [];
   private readonly frontMounts: Group[] = [];
@@ -28,7 +51,7 @@ export class CarModel {
   private wheelTurn = 0;
   private shimmer = 0;
 
-  constructor(color: string) {
+  constructor(color: string, name: string) {
     const body = toonMaterial({ color }, OUTLINE);
     const accent = toonMaterial({ color: new Color(color).multiplyScalar(0.62) }, OUTLINE);
     const dark = toonMaterial({ color: '#2b2f45' }, OUTLINE);
@@ -78,6 +101,11 @@ export class CarModel {
       addWheel(0.5, 0.5, side * 1.02, -1.05, false);
       addWheel(0.42, 0.4, side * 0.98, 1.2, true);
     }
+
+    this.label = new Sprite(nameTag(name, color));
+    this.label.position.y = 2.7;
+    this.label.scale.set(3.2, 0.8, 1);
+    this.root.add(this.label);
   }
 
   update(car: CarState, dt: number): void {
@@ -99,6 +127,8 @@ export class CarModel {
   }
 
   dispose(): void {
+    this.label.material.map?.dispose();
+    this.label.material.dispose();
     this.root.traverse((object) => {
       if (!(object instanceof Mesh)) return;
       object.geometry.dispose();

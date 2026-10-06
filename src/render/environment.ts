@@ -4,8 +4,10 @@
  * `Environment` adds a gradient sky dome with a soft sun glow (a small ShaderMaterial drawn at
  * the far plane and kept centred on the camera), a hemisphere fill light, a shadow-casting sun,
  * and distance fog tinted to the horizon so far scenery melts into the sky. `setTimeOfDay`
- * applies a `TIME_PRESETS` entry to every colour, intensity, and the sun direction. `follow`
- * keeps the sun's shadow frustum centred on the focused car so nearby shadows stay crisp.
+ * applies a `TIME_PRESETS` entry to every colour, intensity, and the sun direction.
+ * `setFogOffset` pushes the fog back by a distance, so a camera filming from far away sees the
+ * same haze as one up close. `follow` keeps the sun's shadow frustum centred on the focused car
+ * so nearby shadows stay crisp.
  */
 import {
   BackSide,
@@ -75,6 +77,7 @@ export const TIME_PRESETS: Record<TimeOfDay, Preset> = {
 };
 
 const SHADOW_EXTENT = 70;
+const FOG_NEAR = 160;
 
 const skyVertexShader = /* glsl */ `
   varying vec3 vDirection;
@@ -107,8 +110,10 @@ export class Environment {
   private readonly sky: Mesh<SphereGeometry, ShaderMaterial>;
   private readonly sun = new DirectionalLight();
   private readonly fill = new HemisphereLight();
-  private readonly fog = new Fog('#ffffff', 160, 1700);
+  private readonly fog = new Fog('#ffffff', FOG_NEAR, 1700);
   private readonly sunDirection = new Vector3();
+  private fogFar = 1700;
+  private fogOffset = 0;
 
   constructor(scene: Scene) {
     const skyMaterial = new ShaderMaterial({
@@ -156,7 +161,14 @@ export class Environment {
     this.fill.groundColor.set(preset.ground);
     this.fill.intensity = preset.fill;
     this.fog.color.set(preset.horizon);
-    this.fog.far = preset.fogFar;
+    this.fogFar = preset.fogFar;
+    this.setFogOffset(this.fogOffset);
+  }
+
+  setFogOffset(metres: number): void {
+    this.fogOffset = metres;
+    this.fog.near = FOG_NEAR + metres;
+    this.fog.far = this.fogFar + metres;
   }
 
   follow(focus: Vector3, cameraPosition: Vector3): void {

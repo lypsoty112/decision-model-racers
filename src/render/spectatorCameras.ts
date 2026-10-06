@@ -2,7 +2,8 @@
  * The spectator cameras: a whole-track overhead view and a TV director.
  *
  * `OverheadCamera` frames the entire circuit from high above, tilted OVERHEAD_TILT radians
- * towards the viewer for depth; `resize` moves it so the track fits any aspect ratio. On a
+ * towards the viewer for depth; `resize` moves it so the track fits any aspect ratio and records
+ * that `distance` to the track's centre. On a
  * portrait screen it turns a quarter and widens the vertical field of view, so the track's long
  * side runs down the screen at the same distance as in landscape, well inside the fog.
  * `TvCamera` films from trackside posts placed every POST_SPACING metres on the outside of the
@@ -31,6 +32,7 @@ type Post = { s: number; position: Vector3 };
 
 export class OverheadCamera {
   readonly camera = new PerspectiveCamera(OVERHEAD_FOV, 1, 10, 8000);
+  distance = 0;
   private readonly center: Vector3;
   private readonly width: number;
   private readonly depth: number;
@@ -51,6 +53,7 @@ export class OverheadCamera {
     const tanHalf = Math.tan(MathUtils.degToRad(OVERHEAD_FOV / 2));
     const distance = (Math.max(this.depth, this.width / stretch) * OVERHEAD_MARGIN) / (2 * tanHalf);
     const lean = distance * Math.sin(OVERHEAD_TILT);
+    this.distance = distance;
     this.camera.aspect = aspect;
     this.camera.fov = portrait ? MathUtils.radToDeg(2 * Math.atan(tanHalf * stretch)) : OVERHEAD_FOV;
     this.camera.position.set(this.center.x + (portrait ? lean : 0), distance * Math.cos(OVERHEAD_TILT), this.center.z + (portrait ? 0 : lean));

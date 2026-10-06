@@ -54,7 +54,7 @@ function Speedometer({ speed }: { speed: number }) {
 
 export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
   useTick(50);
-  const [stored] = useState(readTrackRecord);
+  const [stored] = useState(() => readTrackRecord(race.track.id));
   const spectating = !race.racers.some((racer) => racer.id === PLAYER_ID);
   const standings = race.standings();
   const leader = standings[0];
@@ -67,7 +67,7 @@ export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
       : stored;
 
   useEffect(() => {
-    if (record && record !== stored) submitLap(record);
+    if (record && record !== stored) submitLap(race.track.id, record);
   });
 
   return (

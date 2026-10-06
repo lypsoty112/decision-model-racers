@@ -1,20 +1,24 @@
 /*
  * The three.js side of the game: renderer, scene, and the per-frame loop.
  *
- * `GameEngine` builds the static world once (environment, landscape, track) and swaps the karts
- * whenever `setRace` receives a new race. Each animation frame advances the race unless
+ * `GameEngine` builds the environment once and swaps the karts whenever `setRace` receives a new
+ * race. `buildWorld` makes the track-dependent part (landscape, track meshes, and the overhead
+ * and TV cameras) and `setRace` rebuilds it, freeing the old meshes, when the new race runs on a
+ * different track. Each animation frame advances the race unless
  * `paused`, poses every `CarModel`, kicks up dust and tyre smoke in `emitTrail`, and films the
  * race with the camera chosen by `setCameraMode`: the chase camera behind the focused racer
  * (`setFocus`; the leader when the id is unknown), the whole-track overhead view (karts and
- * name tags enlarged by `applyDisplayScale`), or the TV director, whose choice of racer is
+ * name tags enlarged by `applyDisplayScale`, fog pushed back by the camera's distance), or the
+ * TV director, whose choice of racer is
  * reported through `onFocusChange`. It renders through three's OutlineEffect for ink lines and,
  * in chase view only, draws the speed-line overlay on top. `setTimeOfDay` re-lights the scene;
  * `dispose` stops the loop and frees the WebGL context.
  */
-import { Color, PCFShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
+import { Color, Group, Mesh, type MeshToonMaterial, PCFShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
 import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
 import { CAR_SPEC, type CarState } from '../sim/car';
 import type { Race } from '../sim/race';
+import type { Track } from '../sim/track';
 import { CarModel } from './carModel';
 import { ChaseCamera } from './chaseCamera';
 import { Environment, type TimeOfDay } from './environment';
@@ -38,8 +42,10 @@ export class GameEngine {
   private readonly scene = new Scene();
   private readonly outline: OutlineEffect;
   private readonly chase = new ChaseCamera();
-  private readonly overhead: OverheadCamera;
-  private readonly tv: TvCamera;
+  private readonly world = new Group();
+  private readonly container: HTMLElement;
+  private overhead!: OverheadCamera;
+  private tv!: TvCamera;
   private readonly focusPoint = new Vector3();
   private readonly environment: Environment;
   private readonly speedLines = new SpeedLines();
@@ -52,6 +58,7 @@ export class GameEngine {
   private lastTime = performance.now();
 
   constructor(container: HTMLElement, race: Race) {
+    this.container = container;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = PCFShadowMap;
@@ -59,18 +66,21 @@ export class GameEngine {
     this.outline = new OutlineEffect(this.renderer, { defaultThickness: 0.003, defaultColor: [0.09, 0.1, 0.16] });
     this.outline.autoClear = true;
     this.environment = new Environment(this.scene);
-    this.overhead = new OverheadCamera(race.track);
-    this.tv = new TvCamera(race.track);
-    this.scene.add(buildLandscape(race.track), buildTrackMesh(race.track), this.particles.points);
+    this.scene.add(this.world, this.particles.points);
+    this.buildWorld(race.track);
     this.race = race;
     this.setRace(race);
-    this.resizeObserver = new ResizeObserver(() => this.resize(container));
+    this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
-    this.resize(container);
+    this.resize();
     this.frameHandle = requestAnimationFrame(this.frame);
   }
 
   setRace(race: Race): void {
+    if (race.track !== this.race.track) {
+      this.buildWorld(race.track);
+      this.resize();
+    }
     for (const model of this.models.values()) {
       this.scene.remove(model.root);
       model.dispose();
@@ -111,9 +121,25 @@ export class GameEngine {
     this.renderer.domElement.remove();
   }
 
-  private resize(container: HTMLElement): void {
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
-    for (const view of [this.chase, this.overhead, this.tv]) view.resize(container.clientWidth, container.clientHeight);
+  private buildWorld(track: Track): void {
+    this.world.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      object.geometry.dispose();
+      for (const material of [object.material].flat() as MeshToonMaterial[]) {
+        material.map?.dispose();
+        material.dispose();
+      }
+    });
+    this.world.clear();
+    this.world.add(buildLandscape(track), buildTrackMesh(track));
+    this.overhead = new OverheadCamera(track);
+    this.tv = new TvCamera(track);
+  }
+
+  private resize(): void {
+    const { clientWidth, clientHeight } = this.container;
+    this.renderer.setSize(clientWidth, clientHeight);
+    for (const view of [this.chase, this.overhead, this.tv]) view.resize(clientWidth, clientHeight);
   }
 
   private applyDisplayScale(model: CarModel): void {
@@ -141,6 +167,7 @@ export class GameEngine {
     if (this.cameraMode === 'chase') this.chase.follow(focused.car, dt);
     const camera = { chase: this.chase.camera, overhead: this.overhead.camera, tv: this.tv.camera }[this.cameraMode];
     this.environment.follow(this.focusPoint.set(focused.car.x, focused.car.y, focused.car.z), camera.position);
+    this.environment.setFogOffset(this.cameraMode === 'overhead' ? this.overhead.distance : 0);
     this.particles.update(this.paused ? 0 : dt, camera, this.renderer.domElement.height);
     this.outline.render(this.scene, camera);
     const speedRatio = Math.abs(focused.car.speed) / CAR_SPEC.maxSpeed;

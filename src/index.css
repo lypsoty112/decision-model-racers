@@ -672,6 +672,16 @@ code {
   color: var(--cool);
 }
 
+.track-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.track-picker .segmented {
+  flex: 1;
+}
+
 .model-list code {
   overflow: hidden;
   font-size: 11.5px;

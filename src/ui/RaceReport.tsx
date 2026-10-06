@@ -179,7 +179,7 @@ export function RaceReport({ race, onClose }: RaceReportProps) {
           <div>
             <p className="eyebrow">Race report</p>
             <h1>
-              Meadow Ring · {race.totalLaps} {race.totalLaps === 1 ? 'lap' : 'laps'}
+              {race.track.name} · {race.totalLaps} {race.totalLaps === 1 ? 'lap' : 'laps'}
             </h1>
             <p className="muted">
               {rows.length} racers · {(race.track.length / 1000).toFixed(2)} km lap · {rows.filter((row) => row.finishTime !== null).length} finished

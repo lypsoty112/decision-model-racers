@@ -2,11 +2,13 @@
  * Root component: wires the 3D engine, the race, the menu, and the HUD together.
  *
  * `App` owns the current session (a `Race`, and whether it is the bots-only demo that runs
- * behind the menu), the menu settings, the visible screen, which racer the camera follows, the
- * camera mode, and whether telemetry or the race report is open. `startRace` builds a race from
- * the settings and begins its countdown when `canStart` allows it, on the chase camera when you
- * race and on the TV camera when you spectate; `openMenu` pauses a running
- * race behind the menu and `resume` continues it. If the OpenRouter key turns invalid or runs out
+ * behind the menu), the last finished race for the menu's results and report, the menu settings,
+ * the visible screen, which racer the camera follows, the camera mode, and whether telemetry or
+ * the race report is open. When the menu selects a different track and no race is paused behind
+ * it, the demo restarts on that track PREVIEW_DELAY ms after the last change. `startRace` builds a
+ * race from the settings and begins its countdown when `canStart` allows it, on the chase camera
+ * when you race and on the TV camera when you spectate; `openMenu` pauses a running race behind
+ * the menu and `resume` continues it. If the OpenRouter key turns invalid or runs out
  * of credits during a decision-model race, that race is stopped and replaced by the demo race.
  * Global keys: R respawns the player (`respawnPlayer`), V and Shift+V cycle the followed racer
  * (`cycleFocus`), C cycles the camera mode while spectating (`cycleCamera`), T toggles telemetry,
@@ -16,7 +18,7 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { installRacerApi } from './api/racerApi';
-import { canStart, createRace, DEFAULT_SETTINGS, DEMO_SETTINGS, PLAYER_ID, type RaceSettings } from './game/setup';
+import { canStart, createRace, DEFAULT_SETTINGS, demoSettings, PLAYER_ID, type RaceSettings, trackFor } from './game/setup';
 import { Keyboard } from './input/keyboard';
 import { getKeyStatus, keyUsable, ModelDriver, subscribeKeyStatus } from './models/modelDriver';
 import { type CameraMode, GameEngine } from './render/engine';
@@ -32,9 +34,10 @@ type Session = { race: Race; demo: boolean };
 
 const keyboard = new Keyboard();
 const CAMERA_MODES: CameraMode[] = ['chase', 'overhead', 'tv'];
+const PREVIEW_DELAY = 500;
 
-function startDemo(): Session {
-  const race = createRace(DEMO_SETTINGS, keyboard);
+function startDemo(settings: RaceSettings): Session {
+  const race = createRace(demoSettings(settings), keyboard);
   race.start();
   return { race, demo: true };
 }
@@ -42,9 +45,12 @@ function startDemo(): Session {
 export default function App() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
-  const [session, setSession] = useState(startDemo);
+  const [session, setSession] = useState(() => startDemo(DEFAULT_SETTINGS));
   const sessionRef = useRef(session);
+  const [lastRace, setLastRace] = useState<Race | null>(null);
   const [settings, setSettings] = useState<RaceSettings>(DEFAULT_SETTINGS);
+  const settingsRef = useRef(settings);
+  const track = trackFor(settings);
   const [screen, setScreen] = useState<'menu' | 'race'>('menu');
   const [paused, setPaused] = useState(false);
   const [focusId, setFocusId] = useState('');
@@ -70,6 +76,15 @@ export default function App() {
   useEffect(() => engineRef.current?.setCameraMode(cameraMode), [cameraMode]);
   useEffect(() => engineRef.current?.setTimeOfDay(settings.timeOfDay), [settings.timeOfDay]);
   useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+  useEffect(() => {
+    const { race: current, demo } = sessionRef.current;
+    if (current.track === track || (!demo && current.phase !== 'finished')) return;
+    const timer = setTimeout(() => setSession(startDemo(settingsRef.current)), PREVIEW_DELAY);
+    return () => clearTimeout(timer);
+  }, [track]);
+  useEffect(() => {
     if (engineRef.current) engineRef.current.paused = paused;
   }, [paused]);
   useEffect(
@@ -78,7 +93,7 @@ export default function App() {
         const { race: current, demo } = sessionRef.current;
         const usesModels = current.racers.some((racer) => racer.driver instanceof ModelDriver);
         if (keyUsable(getKeyStatus()) || demo || !usesModels || current.phase === 'finished') return;
-        setSession(startDemo());
+        setSession(startDemo(settingsRef.current));
         setPaused(false);
         setFocusId('');
         setScreen('menu');
@@ -91,6 +106,7 @@ export default function App() {
     const next = createRace(settings, keyboard);
     next.start();
     setSession({ race: next, demo: false });
+    setLastRace(null);
     setFocusId(settings.participate ? PLAYER_ID : '');
     setCameraMode(settings.participate ? 'chase' : 'tv');
     setPaused(false);
@@ -101,7 +117,10 @@ export default function App() {
   const openMenu = () => {
     const finished = race.phase === 'finished';
     setPaused(!session.demo && !finished);
-    if (finished) setFocusId('');
+    if (finished) {
+      setFocusId('');
+      if (!session.demo) setLastRace(race);
+    }
     setScreen('menu');
   };
 
@@ -175,10 +194,10 @@ export default function App() {
           onStart={startRace}
           onResume={paused ? resume : null}
           onReport={() => setReportOpen(true)}
-          results={!session.demo && race.phase === 'finished' ? race.standings() : null}
+          results={lastRace?.standings() ?? null}
         />
       )}
-      {screen === 'menu' && reportOpen && <RaceReport race={race} onClose={() => setReportOpen(false)} />}
+      {screen === 'menu' && reportOpen && lastRace && <RaceReport race={lastRace} onClose={() => setReportOpen(false)} />}
     </div>
   );
 }

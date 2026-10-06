@@ -3,7 +3,8 @@
  * geometric queries the simulation and renderer share.
  *
  * `Track` builds `samples` (position, unit tangent, smoothed signed curvature) from control
- * points and detects `corners` as runs of same-direction samples tighter than CORNER_RADIUS.
+ * points and detects `corners` as runs of same-direction samples tighter than CORNER_RADIUS. Its
+ * `id` keys stored records and its `name` is shown to players.
  * `sampleAt` interpolates any distance along the lap, `pointAt` offsets that sample sideways,
  * `signedDistance` gives the shortest along-track step between two positions, and `project` maps a world x/z to distance-along and lateral offset by searching a window of
  * samples around a hint, falling back to a full scan when the hint is stale. `wrapAngle` folds
@@ -27,6 +28,7 @@ export type Corner = {
 
 export type TrackProjection = { s: number; lateral: number };
 
+export const TRACK_HALF_WIDTH = 9;
 const SAMPLE_SPACING = 2;
 const CORNER_RADIUS = 160;
 const MIN_CORNER_ANGLE = 20;
@@ -63,6 +65,8 @@ export const DEFAULT_TRACK: [number, number, number][] = [
 export const wrapAngle = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
 export class Track {
+  readonly id: string;
+  readonly name: string;
   readonly halfWidth: number;
   readonly wallOffset: number;
   readonly length: number;
@@ -70,7 +74,9 @@ export class Track {
   readonly samples: TrackSample[];
   readonly corners: Corner[];
 
-  constructor(controlPoints: [number, number, number][], halfWidth: number) {
+  constructor(controlPoints: [number, number, number][], halfWidth: number, label: { id: string; name: string }) {
+    this.id = label.id;
+    this.name = label.name;
     const curve = new CatmullRomCurve3(
       controlPoints.map(([x, y, z]) => new Vector3(x, y, z)),
       true,

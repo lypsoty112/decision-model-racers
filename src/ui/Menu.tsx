@@ -1,9 +1,11 @@
 /*
  * Between-races menu: race configuration, the stored track record, and the last race's results.
  *
- * `Menu` edits `RaceSettings`: lap count, racing or spectating, the CPU type (bots with a count
- * and skill, or OpenRouter decision models), time of day, and, when racing, driver name and kart
- * colour. Decision-model races are capped at MODEL_MAX_LAPS laps. Each time the menu opens it
+ * `Menu` edits `RaceSettings`: the track (Meadow Ring, or a random track with a length,
+ * complexity, and a New track button for a fresh seed; the title shows the selected track's name,
+ * length, corners, seed, and record), lap count, racing or spectating, the CPU type (bots with a
+ * count and skill, or OpenRouter decision models), time of day, and, when racing, driver name and
+ * kart colour. Decision-model races are capped at MODEL_MAX_LAPS laps. Each time the menu opens it
  * re-checks the OpenRouter key and blocks decision-model races while the key is invalid or out of
  * credits. It offers Resume while a race is paused behind it, and after a race it shows the final
  * standings with a button to reopen the full report, and it links the source on GitHub.
@@ -16,14 +18,17 @@ import {
   canStart,
   lapsFor,
   MAX_BOTS,
+  MAX_COMPLEXITY,
   MAX_COPIES,
   MAX_MODELS,
   type ModelEntry,
   MODEL_MAX_LAPS,
+  newSeed,
   PLAYER_COLORS,
   PLAYER_ID,
   type RaceSettings,
-  TRACK,
+  TRACK_LENGTH,
+  trackFor,
 } from '../game/setup';
 import { DRIVING_STYLES, type DrivingStyle } from '../models/decisionState';
 import { type DecisionModelInfo, type KeyStatus, keyUsable, listDecisionModels, refreshKeyStatus } from '../models/modelDriver';
@@ -119,7 +124,9 @@ export function Menu({ settings, keyStatus, onChange, onStart, onResume, onRepor
     const next = { ...settings, ...patch };
     onChange(next.participate ? next : { ...next, bots: Math.max(1, next.bots) });
   };
-  const record = readTrackRecord();
+  const updateTrack = (patch: Partial<RaceSettings['randomTrack']>) => update({ randomTrack: { ...settings.randomTrack, ...patch } });
+  const track = trackFor(settings);
+  const record = readTrackRecord(track.id);
   const timeOptions = (Object.keys(TIME_PRESETS) as TimeOfDay[]).map((time): [TimeOfDay, string] => [time, TIME_PRESETS[time].label]);
 
   return (
@@ -127,9 +134,10 @@ export function Menu({ settings, keyStatus, onChange, onStart, onResume, onRepor
       <div className="panel menu">
         <header className="menu-title">
           <p className="eyebrow">Decision Model Racers</p>
-          <h1>Meadow Ring</h1>
+          <h1>{track.name}</h1>
           <p>
-            {(TRACK.length / 1000).toFixed(2)} km · {TRACK.corners.length} corners · Record{' '}
+            {(track.length / 1000).toFixed(2)} km · {track.corners.length} corners ·{' '}
+            {settings.circuit === 'random' && `seed ${settings.randomTrack.seed} · `}Record{' '}
             {record ? `${formatTime(record.time)} by ${record.name}` : 'not set yet'}
           </p>
         </header>
@@ -141,6 +149,54 @@ export function Menu({ settings, keyStatus, onChange, onStart, onResume, onRepor
           }}
         >
           <div className="menu-grid">
+            <div className="field wide">
+              <span>Track</span>
+              <div className="track-picker">
+                <Segmented
+                  label="Track"
+                  value={settings.circuit}
+                  options={[
+                    ['meadow', 'Meadow Ring'],
+                    ['random', 'Random'],
+                  ]}
+                  onSelect={(circuit) => update({ circuit })}
+                />
+                {settings.circuit === 'random' && (
+                  <button type="button" className="button secondary small" onClick={() => updateTrack({ seed: newSeed() })}>
+                    New track
+                  </button>
+                )}
+              </div>
+            </div>
+            {settings.circuit === 'random' && (
+              <>
+                <label className="field">
+                  <span>
+                    Length <strong>{settings.randomTrack.length.toFixed(1)} km</strong>
+                  </span>
+                  <input
+                    type="range"
+                    min={TRACK_LENGTH.min}
+                    max={TRACK_LENGTH.max}
+                    step={0.1}
+                    value={settings.randomTrack.length}
+                    onChange={(event) => updateTrack({ length: Math.round(Number(event.target.value) * 10) / 10 })}
+                  />
+                </label>
+                <label className="field">
+                  <span>
+                    Complexity <strong>{settings.randomTrack.complexity}</strong>
+                  </span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={MAX_COMPLEXITY}
+                    value={settings.randomTrack.complexity}
+                    onChange={(event) => updateTrack({ complexity: Number(event.target.value) })}
+                  />
+                </label>
+              </>
+            )}
             <label className="field">
               <span>
                 Laps {settings.cpu === 'models' && <em className="muted">decision models race {MODEL_MAX_LAPS}</em>}

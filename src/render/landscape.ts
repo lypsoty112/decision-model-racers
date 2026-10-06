@@ -6,7 +6,8 @@
  * nearest road height (flat run-off beside the track, found by `nearestTrack`) to `hills`, which
  * rises into a jagged mountain ridge far from the circuit. The terrain grid takes its height from
  * `groundHeight` and its vertex colours from `groundColor` (sandy verge, varied grass, rock, and
- * snow by altitude). Props are scattered with the seeded `mulberry32` generator, kept off the
+ * snow by altitude). Props are scattered with the seeded `mulberry32` generator from
+ * `src/sim/trackGenerator.ts`, kept off the
  * run-off, merged per kind with `paint`, and drawn with one toon material each.
  */
 import {
@@ -25,6 +26,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Track } from '../sim/track';
+import { mulberry32 } from '../sim/trackGenerator';
 import { paint, toonMaterial } from './toon';
 
 const TERRAIN_SIZE = 3000;
@@ -40,15 +42,6 @@ const GRASS_DARK = new Color('#5c9443');
 const VERGE = new Color('#d9c690');
 const ROCK = new Color('#9a9f8e');
 const SNOW = new Color('#f2f6f8');
-
-function mulberry32(seed: number): () => number {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 function place(x: number, y: number, z: number, scale: [number, number, number], yaw = 0): Matrix4 {
   return new Matrix4().compose(new Vector3(x, y, z), new Quaternion().setFromAxisAngle(UP, yaw), new Vector3(...scale));

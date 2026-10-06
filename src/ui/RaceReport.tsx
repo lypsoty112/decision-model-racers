@@ -2,20 +2,22 @@
  * The full-screen post-race report.
  *
  * `RaceReport` summarizes every racer once with `summarize`, adding `modelSummary` (model, driving
- * style, decisions, rate, latency, errors, cost) for racers driven by an OpenRouter model. It lays out highlight
+ * style, decisions, rate, latency, errors, cost) for racers driven by an OpenRouter model and the
+ * personality of each bot. It lays out highlight
  * cards chosen by `leaderOf`, two `LineChart`s (race position over time, and speed around the
  * lap), the metrics grid where each row comes from METRICS and the best value is marked, and the
  * lap-times table. "Copy JSON" exports every summary; "Back to menu" closes it.
  */
 import { useMemo, useState } from 'react';
 import { ModelDriver } from '../models/modelDriver';
+import { BotDriver } from '../sim/botDriver';
 import { PROFILE_BIN, type Race, type Racer } from '../sim/race';
 import { type RacerSummary, summarize } from '../sim/raceStats';
 import { formatTime, ordinal } from './format';
 
 type RaceReportProps = { race: Race; onClose: () => void };
 type ModelSummary = ReturnType<typeof modelSummary>;
-type Row = RacerSummary & { model: ModelSummary | null };
+type Row = RacerSummary & { model: ModelSummary | null; personality: string | null };
 type Metric = { group: string; label: string; value: (row: Row) => number | null; format: (value: number) => string; better?: 'high' | 'low' };
 type Series = { color: string; points: [number, number][] };
 
@@ -132,7 +134,15 @@ function LineChart({ series, xMax, yMin, yMax, invertY, xLabel, yLabel }: { seri
 
 export function RaceReport({ race, onClose }: RaceReportProps) {
   const [copied, setCopied] = useState(false);
-  const rows = useMemo<Row[]>(() => race.standings().map((racer) => ({ ...summarize(racer, race), model: modelSummary(racer) })), [race]);
+  const rows = useMemo<Row[]>(
+    () =>
+      race.standings().map((racer) => ({
+        ...summarize(racer, race),
+        model: modelSummary(racer),
+        personality: racer.driver instanceof BotDriver ? racer.driver.personality : null,
+      })),
+    [race],
+  );
   const winner = rows[0];
   const laps = Math.max(1, ...rows.map((row) => row.lapTimes.length));
   const topSpeed = Math.max(1, ...rows.map((row) => row.topSpeedKmh));
@@ -237,6 +247,7 @@ export function RaceReport({ race, onClose }: RaceReportProps) {
                   <th key={row.id}>
                     <span className="swatch" style={{ background: row.color }} /> {row.name}
                     {row.model && <small>{row.model.model}</small>}
+                    {row.personality && <small>{row.personality}</small>}
                   </th>
                 ))}
               </tr>

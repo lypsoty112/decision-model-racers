@@ -2,13 +2,15 @@
  * Live view of the `RacerObservation` the focused racer's driver receives, which is exactly what
  * a decision model gets through `window.racerAPI`.
  *
- * `Telemetry` refreshes ten times a second and lists the core state (plus model id, driving
- * style, decisions, latency, cost, and errors for an OpenRouter decision model), the controls as bars, the corners
+ * `Telemetry` refreshes ten times a second and lists the core state (plus a bot's personality,
+ * or model id, driving style, decisions, latency, cost, and errors for an OpenRouter decision
+ * model), the controls as bars, the corners
  * ahead, and the nearest opponents. "Copy JSON" puts the full observation on the
  * clipboard. `Bar` draws a signed or unsigned value as a filled track.
  */
 import { useState } from 'react';
 import { ModelDriver } from '../models/modelDriver';
+import { BotDriver } from '../sim/botDriver';
 import type { Race } from '../sim/race';
 import { formatTime } from './format';
 import { useTick } from './useTick';
@@ -77,6 +79,12 @@ export function Telemetry({ race, focusId }: TelemetryProps) {
         <dd>{formatTime(observation.timing.currentLap)}</dd>
         <dt>respawns</dt>
         <dd>{observation.respawns}</dd>
+        {racer.driver instanceof BotDriver && (
+          <>
+            <dt>personality</dt>
+            <dd>{racer.driver.personality}</dd>
+          </>
+        )}
         {racer.driver instanceof ModelDriver && (
           <>
             <dt>model</dt>

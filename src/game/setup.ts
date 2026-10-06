@@ -2,12 +2,14 @@
  * Turns between-races menu settings into a ready-to-start `Race`.
  *
  * `RaceSettings` is everything the menu configures. `TRACK` is the single circuit, built once and
- * shared by every race. `createRace` fills the grid with the chosen CPU type: `BotDriver`s whose
- * grip and pace rise evenly across the difficulty range from pole to the back row (so the
- * strongest bots fight through the field), or one `ModelDriver` per `ModelEntry` (up to
- * MAX_MODELS entries, at most MAX_COPIES of one model), named "<model> · <style>" with a number
- * added when the same model and style repeat. When `participate` is set, it slots the
- * keyboard racer into the middle of the grid. `canStart` refuses an empty grid and, while the
+ * shared by every race. `createRace` fills the grid with the chosen CPU type: `BotDriver`s from
+ * the BOTS roster, whose grip and pace rise evenly across the difficulty range from the first
+ * bot to the last and are then nudged by each bot's personality along with its braking, berth to
+ * cars ahead, line-change, and apex style (unset knobs take STYLE_DEFAULTS), or one
+ * `ModelDriver` per `ModelEntry` (up to MAX_MODELS entries, at most MAX_COPIES of one model),
+ * named "<model> · <style>" with a number added when the same model and style repeat. When
+ * `participate` is set, it adds the keyboard racer, and `shuffle` then gives every racer a
+ * random grid slot. `canStart` refuses an empty grid and, while the
  * OpenRouter key is invalid or out of credits, any decision-model race; `lapsFor` caps
  * decision-model races at MODEL_MAX_LAPS.
  * `DEMO_SETTINGS` describes the bots-only race that runs behind the menu.
@@ -43,8 +45,20 @@ export const MODEL_MAX_LAPS = 1;
 export const PLAYER_COLORS = ['#e63946', '#ff9f1c', '#2ec4b6', '#3a86ff', '#8338ec', '#ffbe0b', '#f15bb5', '#f1faee'];
 export const TRACK = new Track(DEFAULT_TRACK, 9);
 
-const BOT_NAMES = ['Nova', 'Blitz', 'Pixel', 'Comet', 'Echo', 'Turbo', 'Zephyr', 'Quark', 'Rally', 'Sprocket', 'Vex', 'Byte'];
-const BOT_COLORS = ['#ef476f', '#ffd166', '#06d6a0', '#118ab2', '#f78c6b', '#9b5de5', '#00bbf9', '#8ac926', '#ff924c', '#4cc9f0', '#c77dff', '#e9c46a'];
+const STYLE_DEFAULTS = { grip: 1, pace: 1, brake: 0.7, berth: 1, lineShift: 7, apex: 1 };
+const BOTS: ({ name: string; color: string; personality: string } & Partial<typeof STYLE_DEFAULTS>)[] = [
+  { name: 'Nova', color: '#ef476f', personality: 'Smooth operator', lineShift: 5, brake: 0.66 },
+  { name: 'Blitz', color: '#ffd166', personality: 'Late braker', brake: 0.8 },
+  { name: 'Pixel', color: '#06d6a0', personality: 'Apex hunter', apex: 1.25 },
+  { name: 'Comet', color: '#118ab2', personality: 'Straight-line rocket', pace: 1.03, grip: 0.97 },
+  { name: 'Echo', color: '#f78c6b', personality: 'Slipstream shadow', berth: 0.6 },
+  { name: 'Turbo', color: '#9b5de5', personality: 'Hothead', lineShift: 10, berth: 0.7 },
+  { name: 'Zephyr', color: '#00bbf9', personality: 'Wide-line flier', apex: 0.75 },
+  { name: 'Quark', color: '#8ac926', personality: 'Corner carver', grip: 1.03, pace: 0.97 },
+  { name: 'Rally', color: '#ff924c', personality: 'Elbows out', berth: 0.75 },
+  { name: 'Sprocket', color: '#4cc9f0', personality: 'Careful veteran', brake: 0.62, berth: 1.4 },
+  { name: 'Vex', color: '#c77dff', personality: 'Perfectionist', grip: 1.02, brake: 0.74 },
+];
 const DIFFICULTY: Record<Difficulty, { grip: [number, number]; pace: [number, number] }> = {
   rookie: { grip: [0.6, 0.72], pace: [0.78, 0.85] },
   pro: { grip: [0.8, 0.92], pace: [0.88, 0.95] },
@@ -72,17 +86,26 @@ export function canStart(settings: RaceSettings, keyStatus: KeyStatus): boolean 
 
 export const lapsFor = (settings: RaceSettings) => (settings.cpu === 'models' ? Math.min(settings.laps, MODEL_MAX_LAPS) : settings.laps);
 
+function shuffle<T>(items: T[]): T[] {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
+}
+
 export function createRace(settings: RaceSettings, keyboard: Keyboard): Race {
   const range = DIFFICULTY[settings.difficulty];
   const lerp = ([from, to]: [number, number], t: number) => from + (to - from) * t;
   const bots = (): RacerSetup[] =>
-    Array.from({ length: settings.bots }, (_, i) => {
+    BOTS.slice(0, settings.bots).map((bot, i) => {
       const t = settings.bots > 1 ? i / (settings.bots - 1) : 0.5;
+      const { name, color, personality, grip, pace, ...style } = { ...STYLE_DEFAULTS, ...bot };
       return {
         id: `bot-${i + 1}`,
-        name: BOT_NAMES[i],
-        color: BOT_COLORS[i],
-        driver: new BotDriver({ grip: lerp(range.grip, t), pace: lerp(range.pace, t), lane: ((i % 3) - 1) * 2 }),
+        name,
+        color,
+        driver: new BotDriver({ ...style, grip: lerp(range.grip, t) * grip, pace: lerp(range.pace, t) * pace, lane: ((i % 3) - 1) * 2 }, personality),
       };
     });
   const models = (): RacerSetup[] =>
@@ -91,18 +114,18 @@ export function createRace(settings: RaceSettings, keyboard: Keyboard): Race {
       return {
         id: `model-${i + 1}`,
         name: `${model.name} · ${model.style}${twins ? ` ${twins + 1}` : ''}`,
-        color: BOT_COLORS[i],
+        color: BOTS[i].color,
         driver: new ModelDriver(model.id, model.style),
       };
     });
   const setups = settings.cpu === 'models' ? models() : bots();
   if (settings.participate) {
-    setups.splice(Math.floor(setups.length / 2), 0, {
+    setups.push({
       id: PLAYER_ID,
       name: settings.playerName.trim() || 'You',
       color: settings.playerColor,
       driver: new KeyboardDriver(keyboard),
     });
   }
-  return new Race(TRACK, setups, lapsFor(settings));
+  return new Race(TRACK, shuffle(setups), lapsFor(settings));
 }

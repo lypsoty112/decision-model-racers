@@ -98,9 +98,10 @@ export function observe(race: Race, racer: Racer): RacerObservation {
 
 function cornersAhead(track: Track, s: number): CornerAhead[] {
   return track.corners
-    .map((corner) => {
+    .map((corner, i) => {
       const length = corner.end - corner.start;
       return {
+        index: i + 1,
         distance: track.wrap(corner.end - s) - length,
         length,
         direction: corner.direction,

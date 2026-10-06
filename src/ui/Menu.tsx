@@ -1,22 +1,29 @@
 /*
  * Between-races menu: race configuration, the stored track record, and the last race's results.
  *
- * `Menu` edits `RaceSettings`: lap count, bot count, racing or spectating, bot skill, time of
- * day, and, when racing, driver name and kart colour. It keeps at least one racer on the grid
- * when spectating, offers Resume while a race is paused behind it, and shows the final
- * standings after a race. `Segmented` renders a row of mutually exclusive choices as a radio
- * group.
+ * `Menu` edits `RaceSettings`: lap count, racing or spectating, the CPU type (bots with a count
+ * and skill, or OpenRouter decision models), time of day, and, when racing, driver name and kart
+ * colour. Decision-model races are capped at MODEL_MAX_LAPS laps. Each time the menu opens it
+ * re-checks the OpenRouter key and blocks decision-model races while the key is invalid or out of
+ * credits. It offers Resume while a race is paused behind it, and after a race it shows the final
+ * standings with a button to reopen the full report. `Segmented` renders a row of mutually
+ * exclusive choices as a radio group. `ModelPicker` loads the decision-model catalogue and lets
+ * the player tick up to MAX_MODELS models.
  */
-import { MAX_BOTS, PLAYER_COLORS, PLAYER_ID, type RaceSettings, TRACK } from '../game/setup';
+import { useEffect, useState } from 'react';
+import { canStart, lapsFor, MAX_BOTS, MAX_MODELS, MODEL_MAX_LAPS, PLAYER_COLORS, PLAYER_ID, type RaceSettings, TRACK } from '../game/setup';
+import { type DecisionModelInfo, type KeyStatus, keyUsable, listDecisionModels, refreshKeyStatus } from '../models/modelDriver';
 import { TIME_PRESETS, type TimeOfDay } from '../render/environment';
 import type { Racer } from '../sim/race';
 import { formatTime, ordinal, readTrackRecord } from './format';
 
 type MenuProps = {
   settings: RaceSettings;
+  keyStatus: KeyStatus;
   onChange: (settings: RaceSettings) => void;
   onStart: () => void;
   onResume: (() => void) | null;
+  onReport: () => void;
   results: Racer[] | null;
 };
 
@@ -41,7 +48,43 @@ function Segmented<T extends string | boolean>({ label, value, options, onSelect
   );
 }
 
-export function Menu({ settings, onChange, onStart, onResume, results }: MenuProps) {
+type ModelPickerProps = { selected: DecisionModelInfo[]; onChange: (models: DecisionModelInfo[]) => void };
+
+function ModelPicker({ selected, onChange }: ModelPickerProps) {
+  const [catalogue, setCatalogue] = useState<DecisionModelInfo[] | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    listDecisionModels().then(setCatalogue, (reason: unknown) => setError(String(reason)));
+  }, []);
+  const chosen = new Set(selected.map((model) => model.id));
+  const toggle = (model: DecisionModelInfo) =>
+    onChange(chosen.has(model.id) ? selected.filter((other) => other.id !== model.id) : [...selected, model]);
+
+  if (error) return <p className="model-error">Couldn't load decision models: {error}</p>;
+  if (!catalogue) return <p className="hint">Loading decision models from OpenRouter…</p>;
+  return (
+    <ul className="model-list">
+      {catalogue.map((model) => (
+        <li key={model.id}>
+          <label>
+            <input
+              type="checkbox"
+              checked={chosen.has(model.id)}
+              disabled={!chosen.has(model.id) && selected.length >= MAX_MODELS}
+              onChange={() => toggle(model)}
+            />
+            <span className="model-name">{model.name}</span>
+            <code>{model.id}</code>
+            <span className="muted">${model.promptPrice.toFixed(3)}/M</span>
+          </label>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function Menu({ settings, keyStatus, onChange, onStart, onResume, onReport, results }: MenuProps) {
+  useEffect(() => refreshKeyStatus(), []);
   const update = (patch: Partial<RaceSettings>) => {
     const next = { ...settings, ...patch };
     onChange(next.participate ? next : { ...next, bots: Math.max(1, next.bots) });
@@ -70,20 +113,16 @@ export function Menu({ settings, onChange, onStart, onResume, results }: MenuPro
           <div className="menu-grid">
             <label className="field">
               <span>
-                Laps <strong>{settings.laps}</strong>
-              </span>
-              <input type="range" min={1} max={10} value={settings.laps} onChange={(event) => update({ laps: Number(event.target.value) })} />
-            </label>
-            <label className="field">
-              <span>
-                Bots <strong>{settings.bots}</strong>
+                Laps {settings.cpu === 'models' && <em className="muted">decision models race {MODEL_MAX_LAPS}</em>}
+                <strong>{lapsFor(settings)}</strong>
               </span>
               <input
                 type="range"
-                min={settings.participate ? 0 : 1}
-                max={MAX_BOTS}
-                value={settings.bots}
-                onChange={(event) => update({ bots: Number(event.target.value) })}
+                min={1}
+                max={10}
+                value={lapsFor(settings)}
+                disabled={settings.cpu === 'models'}
+                onChange={(event) => update({ laps: Number(event.target.value) })}
               />
             </label>
             <div className="field">
@@ -98,19 +137,65 @@ export function Menu({ settings, onChange, onStart, onResume, results }: MenuPro
                 onSelect={(participate) => update({ participate })}
               />
             </div>
-            <div className="field">
-              <span>Bot skill</span>
+            <div className="field wide">
+              <span>CPU</span>
               <Segmented
-                label="Bot skill"
-                value={settings.difficulty}
+                label="CPU type"
+                value={settings.cpu}
                 options={[
-                  ['rookie', 'Rookie'],
-                  ['pro', 'Pro'],
-                  ['legend', 'Legend'],
+                  ['bots', 'Bots'],
+                  ['models', 'Decision models'],
                 ]}
-                onSelect={(difficulty) => update({ difficulty })}
+                onSelect={(cpu) => update({ cpu })}
               />
             </div>
+            {settings.cpu === 'bots' ? (
+              <>
+                <label className="field">
+                  <span>
+                    Bots <strong>{settings.bots}</strong>
+                  </span>
+                  <input
+                    type="range"
+                    min={settings.participate ? 0 : 1}
+                    max={MAX_BOTS}
+                    value={settings.bots}
+                    onChange={(event) => update({ bots: Number(event.target.value) })}
+                  />
+                </label>
+                <div className="field">
+                  <span>Bot skill</span>
+                  <Segmented
+                    label="Bot skill"
+                    value={settings.difficulty}
+                    options={[
+                      ['rookie', 'Rookie'],
+                      ['pro', 'Pro'],
+                      ['legend', 'Legend'],
+                    ]}
+                    onSelect={(difficulty) => update({ difficulty })}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="field wide">
+                <span>
+                  Decision models on OpenRouter{' '}
+                  <strong>
+                    {settings.models.length}/{MAX_MODELS}
+                  </strong>
+                </span>
+                <ModelPicker selected={settings.models} onChange={(models) => update({ models })} />
+                {keyUsable(keyStatus) ? (
+                  <p className="hint">
+                    {keyStatus.message}
+                    {keyStatus.remaining !== null && ` $${keyStatus.remaining.toFixed(2)} of credit left.`}
+                  </p>
+                ) : (
+                  <p className="model-error">Decision-model races are blocked. {keyStatus.message}</p>
+                )}
+              </div>
+            )}
             <div className="field wide">
               <span>Time of day</span>
               <Segmented label="Time of day" value={settings.timeOfDay} options={timeOptions} onSelect={(timeOfDay) => update({ timeOfDay })} />
@@ -148,7 +233,7 @@ export function Menu({ settings, onChange, onStart, onResume, results }: MenuPro
                 Resume
               </button>
             )}
-            <button type="submit" className="button primary" autoFocus>
+            <button type="submit" className="button primary" autoFocus disabled={!canStart(settings, keyStatus)}>
               {settings.participate ? 'Start race' : 'Start spectating'}
             </button>
           </div>
@@ -162,7 +247,12 @@ export function Menu({ settings, onChange, onStart, onResume, results }: MenuPro
 
       {results && (
         <aside className="panel menu-results">
-          <h2>Last race</h2>
+          <header className="menu-results-header">
+            <h2>Last race</h2>
+            <button type="button" className="button secondary small" onClick={onReport}>
+              Full report
+            </button>
+          </header>
           <ol>
             {results.map((racer) => (
               <li key={racer.id} className={racer.id === PLAYER_ID ? 'focused' : undefined}>

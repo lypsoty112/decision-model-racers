@@ -9,9 +9,11 @@
     "lint": "oxlint",
     "typecheck": "tsc -b",
     "sim": "bun src/game/headless.ts",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "vite preview --host 0.0.0.0 --port ${PORT:-3991}"
   },
   "dependencies": {
+    "@openrouter/sdk": "^1.4.22",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "three": "^0.186.1"

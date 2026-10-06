@@ -2,7 +2,8 @@
  * Arcade car physics on the track surface.
  *
  * `createCar` places a stationary car at a distance along the track, facing the racing
- * direction. `stepCar` advances one fixed step: speed responds to throttle, brake, reverse,
+ * direction. `isFacingBackwards` tells whether a car points against the racing direction.
+ * `stepCar` advances one fixed step: speed responds to throttle, brake, reverse,
  * drag, slope, and grass, and `draft` (slipstream, 0 to 1, set by the race) lowers drag and
  * raises top speed; the smoothed steer input turns the car at whichever is smaller of the
  * wheel-angle yaw rate and a steer-proportional share of grip, and steering past the grip limit
@@ -65,6 +66,11 @@ export function createCar(track: Track, s: number, lateral: number): CarState {
     longAccel: 0,
     latAccel: 0,
   };
+}
+
+export function isFacingBackwards(car: CarState, track: Track): boolean {
+  const sample = track.sampleAt(car.s);
+  return Math.cos(wrapAngle(Math.atan2(sample.tx, sample.tz) - car.yaw)) < -0.3;
 }
 
 export function stepCar(car: CarState, controls: Controls, track: Track, dt: number): void {

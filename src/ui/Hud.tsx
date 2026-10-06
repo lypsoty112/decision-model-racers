@@ -3,18 +3,22 @@
  *
  * `Hud` lays out the standings tower, the lap and timing panel, the countdown, warnings (wrong
  * way, off track, slipstream), the big position read-out with the `Speedometer` arc gauge, a
- * spectating banner when the camera follows someone other than the player, and the results card
- * once the race is over. `gapText` estimates each racer's gap to the leader from the leader's
+ * spectating banner naming the camera mode and the racer it follows, and the full-screen
+ * `RaceReport` once the race is over. `gapText` estimates each racer's gap to the leader from the leader's
  * average pace. The fastest lap of the session is offered to the stored track record.
  */
 import { useEffect, useState } from 'react';
 import { PLAYER_ID } from '../game/setup';
+import type { CameraMode } from '../render/engine';
 import { CAR_SPEC } from '../sim/car';
 import type { Race, Racer } from '../sim/race';
 import { formatTime, ordinal, readTrackRecord, submitLap } from './format';
+import { RaceReport } from './RaceReport';
 import { useTick } from './useTick';
 
-type HudProps = { race: Race; focusId: string };
+type HudProps = { race: Race; focusId: string; cameraMode: CameraMode; onMenu: () => void };
+
+const CAMERA_LABELS: Record<CameraMode, string> = { chase: 'Chase cam', overhead: "Bird's eye", tv: 'TV' };
 
 const lapOf = (race: Race, racer: Racer) => Math.min(race.totalLaps, Math.max(1, racer.lapsCompleted + 1));
 
@@ -48,9 +52,10 @@ function Speedometer({ speed }: { speed: number }) {
   );
 }
 
-export function Hud({ race, focusId }: HudProps) {
+export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
   useTick(50);
   const [stored] = useState(readTrackRecord);
+  const spectating = !race.racers.some((racer) => racer.id === PLAYER_ID);
   const standings = race.standings();
   const leader = standings[0];
   const focused = standings.find((racer) => racer.id === focusId) ?? leader;
@@ -117,40 +122,23 @@ export function Hud({ race, focusId }: HudProps) {
 
       {focused.id !== PLAYER_ID && (
         <div className="spectating">
-          Spectating <strong style={{ color: focused.color }}>{focused.name}</strong> · <kbd>V</kbd> next racer
+          {CAMERA_LABELS[cameraMode]} · {cameraMode === 'tv' ? 'director on' : 'following'} <strong style={{ color: focused.color }}>{focused.name}</strong>
+          {cameraMode !== 'tv' && (
+            <>
+              {' '}
+              · <kbd>V</kbd> next racer
+            </>
+          )}
+          {spectating && (
+            <>
+              {' '}
+              · <kbd>C</kbd> camera
+            </>
+          )}
         </div>
       )}
 
-      {race.phase === 'finished' && (
-        <div className="panel results">
-          <h2>Race complete</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Pos</th>
-                <th>Racer</th>
-                <th>Time</th>
-                <th>Best lap</th>
-              </tr>
-            </thead>
-            <tbody>
-              {standings.map((racer) => (
-                <tr key={racer.id} className={racer.id === PLAYER_ID ? 'focused' : undefined}>
-                  <td>{ordinal(racer.position)}</td>
-                  <td>
-                    <span className="swatch" style={{ background: racer.color }} /> {racer.name}
-                  </td>
-                  <td>{racer.finishTime === null ? 'DNF' : formatTime(racer.finishTime)}</td>
-                  <td>{formatTime(racer.bestLap)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="hint">
-            Press <kbd>Enter</kbd> for the menu
-          </p>
-        </div>
-      )}
+      {race.phase === 'finished' && <RaceReport race={race} onClose={onMenu} />}
 
       <div className="hints">
         <kbd>W</kbd>/<kbd>↑</kbd> throttle · <kbd>S</kbd>/<kbd>↓</kbd> brake · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>R</kbd> reset ·{' '}

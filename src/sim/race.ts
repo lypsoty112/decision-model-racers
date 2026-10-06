@@ -4,16 +4,19 @@
  * `Race` places racers on a staggered grid behind the line and advances in fixed SIM_STEP
  * increments from `update(frameDt)`. Each `step` sets every car's slipstream from cars close
  * ahead of it (`updateDrafts`), asks every driver for controls from its own observation, moves
- * the cars, resolves car-to-car contact as a damped impulse along the contact
- * normal, then folds the change in track position into `progress` (metres since the start line,
- * negative on the grid). Lap times and finish times come from `progress` crossing multiples of
- * the lap length. `standings` ranks finishers by time and everyone else by progress. Non-human
+ * the cars, resolves car-to-car contact as a damped impulse along the contact normal (counting
+ * each new contact for both racers), then folds the change in track position into `progress`
+ * (metres since the start line, negative on the grid). Lap times and finish times come from
+ * `progress` crossing multiples of the lap length. `standings` ranks finishers by time and
+ * everyone else by progress, and every racer still racing then has its step recorded in its
+ * `stats` for the post-race report. Non-human
  * racers that stay slow or face backwards for STUCK_LIMIT seconds are respawned on the
  * centreline. The race ends when everyone finishes or FINISH_GRACE seconds after the winner.
  */
-import { CAR_SPEC, type CarState, createCar, stepCar } from './car';
+import { CAR_SPEC, type CarState, createCar, isFacingBackwards, stepCar } from './car';
 import { observe } from './observation';
-import { type Track, wrapAngle } from './track';
+import { createStats, type RacerStats, recordStep } from './raceStats';
+import type { Track } from './track';
 import type { Controls, Driver, RacePhase, RacerObservation } from './types';
 
 export const SIM_STEP = 1 / 120;
@@ -34,12 +37,14 @@ export type Racer = RacerSetup & {
   lapStart: number;
   lastLap: number | null;
   bestLap: number | null;
+  lapTimes: number[];
   finishTime: number | null;
   position: number;
   respawns: number;
   stuckTime: number;
   controls: Controls;
   speedProfile: Float32Array;
+  stats: RacerStats;
 };
 
 export class Race {
@@ -51,6 +56,7 @@ export class Race {
   tick = 0;
   private accumulator = 0;
   private winnerTime: number | null = null;
+  private touching = new Set<string>();
 
   constructor(track: Track, setups: RacerSetup[], totalLaps: number) {
     this.track = track;
@@ -65,12 +71,14 @@ export class Race {
         lapStart: 0,
         lastLap: null,
         bestLap: null,
+        lapTimes: [],
         finishTime: null,
         position: i + 1,
         respawns: 0,
         stuckTime: 0,
         controls: { throttle: 0, brake: 0, steer: 0 },
         speedProfile: new Float32Array(Math.ceil(track.length / PROFILE_BIN)),
+        stats: createStats(i + 1),
       };
     });
   }
@@ -105,9 +113,12 @@ export class Race {
     for (const racer of this.racers) {
       this.updateLaps(racer);
       this.updateStuck(racer);
-      if (released) racer.speedProfile[Math.floor(racer.car.s / PROFILE_BIN)] = racer.car.speed;
+      if (released && racer.finishTime === null) racer.speedProfile[Math.floor(racer.car.s / PROFILE_BIN)] = racer.car.speed;
     }
     this.standings().forEach((racer, i) => (racer.position = i + 1));
+    if (this.phase === 'racing') {
+      for (const racer of this.racers) if (racer.finishTime === null) recordStep(racer, this, SIM_STEP);
+    }
     const everyoneDone = this.racers.every((racer) => racer.finishTime !== null);
     const graceOver = this.winnerTime !== null && this.time > this.winnerTime + FINISH_GRACE;
     if (this.phase === 'racing' && (everyoneDone || graceOver)) this.phase = 'finished';
@@ -136,6 +147,7 @@ export class Race {
     if (completed >= 1) {
       racer.lastLap = this.time - racer.lapStart;
       racer.bestLap = Math.min(racer.bestLap ?? Infinity, racer.lastLap);
+      racer.lapTimes.push(racer.lastLap);
     }
     racer.lapStart = this.time;
     racer.lapsCompleted = completed;
@@ -147,9 +159,8 @@ export class Race {
 
   private updateStuck(racer: Racer): void {
     if (this.phase !== 'racing' || racer.driver.kind === 'human') return;
-    const sample = this.track.sampleAt(racer.car.s);
-    const facingBack = Math.cos(wrapAngle(Math.atan2(sample.tx, sample.tz) - racer.car.yaw)) < -0.3;
-    racer.stuckTime = Math.abs(racer.car.speed) < 2 || facingBack ? racer.stuckTime + SIM_STEP : 0;
+    const stuck = Math.abs(racer.car.speed) < 2 || isFacingBackwards(racer.car, this.track);
+    racer.stuckTime = stuck ? racer.stuckTime + SIM_STEP : 0;
     if (racer.stuckTime > STUCK_LIMIT) this.respawn(racer);
   }
 
@@ -171,6 +182,7 @@ export class Race {
 
   private resolveContacts(): void {
     const minDistance = CAR_SPEC.radius * 2;
+    const touching = new Set<string>();
     for (let i = 0; i < this.racers.length; i++) {
       for (let j = i + 1; j < this.racers.length; j++) {
         const a = this.racers[i].car;
@@ -179,6 +191,12 @@ export class Race {
         const dz = b.z - a.z;
         const distance = Math.hypot(dx, dz);
         if (distance >= minDistance || distance === 0) continue;
+        const pair = `${i}:${j}`;
+        touching.add(pair);
+        if (!this.touching.has(pair) && this.phase === 'racing') {
+          this.racers[i].stats.contacts++;
+          this.racers[j].stats.contacts++;
+        }
         const nx = dx / distance;
         const nz = dz / distance;
         const overlap = (minDistance - distance) / 2;
@@ -195,6 +213,7 @@ export class Race {
         b.speed += impulse * alongB;
       }
     }
+    this.touching = touching;
   }
 }
 

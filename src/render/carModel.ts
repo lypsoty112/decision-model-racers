@@ -5,7 +5,8 @@
  * (body, nose, wing, seat, driver, spoiler) that rolls, pitches, and kicks out sideways under
  * load, plus wheels that spin with speed while the front pair steers, and a camera-facing
  * `label` sprite showing the racer's name in a pill outlined with their colour, drawn by
- * `nameTag`. `update` places the kart
+ * `nameTag`. `setDisplayScale` enlarges the kart and, separately, its name tag so both stay legible
+ * from the overhead camera. `update` places the kart
  * on the track, eases the body towards poses derived from lateral and longitudinal acceleration,
  * slip, and road grade, and adds a speed-dependent shimmer that grows on grass. `dispose` frees
  * the kart's geometries and materials.
@@ -17,6 +18,8 @@ import { toonMaterial } from './toon';
 import { canvasTexture } from './trackMesh';
 
 const OUTLINE = 0.0035;
+const LABEL_WIDTH = 3.2;
+const LABEL_HEIGHT = 0.8;
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
@@ -34,7 +37,7 @@ function nameTag(name: string, color: string): SpriteMaterial {
     context.fillStyle = '#ffffff';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillText(name, 256, 66);
+    context.fillText(name, 256, 66, 440);
   });
   return new SpriteMaterial({ map, depthWrite: false });
 }
@@ -104,8 +107,13 @@ export class CarModel {
 
     this.label = new Sprite(nameTag(name, color));
     this.label.position.y = 2.7;
-    this.label.scale.set(3.2, 0.8, 1);
     this.root.add(this.label);
+    this.setDisplayScale(1, 1);
+  }
+
+  setDisplayScale(body: number, label: number): void {
+    this.root.scale.setScalar(body);
+    this.label.scale.set((LABEL_WIDTH * label) / body, (LABEL_HEIGHT * label) / body, 1);
   }
 
   update(car: CarState, dt: number): void {

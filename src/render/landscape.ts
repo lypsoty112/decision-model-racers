@@ -4,11 +4,12 @@
  *
  * `buildLandscape` returns one group holding a few large meshes. `groundHeight` eases from the
  * nearest road height (flat run-off beside the track, found by `nearestTrack`) to `hills`, which
- * rises into a jagged mountain ridge far from the circuit. The terrain grid takes its height from
+ * rises into a jagged mountain ridge from RIDGE_START metres out, or RIDGE_MARGIN beyond the
+ * track's furthest point when the track reaches further. The terrain grid takes its height from
  * `groundHeight` and its vertex colours from `groundColor` (sandy verge, varied grass, rock, and
  * snow by altitude). Props are scattered with the seeded `mulberry32` generator from
- * `src/sim/trackGenerator.ts`, kept off the
- * run-off, merged per kind with `paint`, and drawn with one toon material each.
+ * `src/sim/trackGenerator.ts`, kept off the run-off, merged per kind with `paint`, and drawn with
+ * one toon material each.
  */
 import {
   BufferAttribute,
@@ -32,6 +33,7 @@ import { paint, toonMaterial } from './toon';
 const TERRAIN_SIZE = 3000;
 const TERRAIN_SEGMENTS = 256;
 const RIDGE_START = 560;
+const RIDGE_MARGIN = 80;
 const FLAT_MARGIN = 10;
 const BLEND_WIDTH = 55;
 const UP = new Vector3(0, 1, 0);
@@ -54,6 +56,7 @@ function smoothstep(from: number, to: number, x: number): number {
 
 export function buildLandscape(track: Track): Group {
   const center = track.samples.reduce((sum, s) => sum.add(new Vector3(s.x, 0, s.z)), new Vector3()).divideScalar(track.samples.length);
+  const ridgeStart = Math.max(RIDGE_START, ...track.samples.map((s) => Math.hypot(s.x - center.x, s.z - center.z) + RIDGE_MARGIN));
 
   const nearestTrack = (x: number, z: number) => {
     let best = Infinity;
@@ -71,7 +74,7 @@ export function buildLandscape(track: Track): Group {
 
   const ridgeAt = (x: number, z: number) => {
     const angle = Math.atan2(z - center.z, x - center.x);
-    const reach = Math.max(0, Math.hypot(x - center.x, z - center.z) - RIDGE_START);
+    const reach = Math.max(0, Math.hypot(x - center.x, z - center.z) - ridgeStart);
     return reach * 0.28 * (0.55 + 0.45 * Math.sin(angle * 7 + 1.3 * Math.sin(angle * 3)));
   };
 

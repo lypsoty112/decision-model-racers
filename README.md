@@ -36,8 +36,9 @@ The menu between races sets the track, the lap count, racing or spectating, the 
 time of day, and your name and kart colour. The track is Meadow Ring by default, or a random
 track generated from a seed, a length (1.5–2.7 km), and a complexity (1–5). Each random track
 gets a two-word name and its own lap record, and the race behind the menu previews it. New track
-picks a fresh seed. The generator (`src/sim/trackGenerator.ts`) rejects layouts with corners
-tighter than 24 m, sections that come too close, a curved start, or a lap that leaves the valley. The fastest lap ever driven is stored as the track record. When a
+picks a fresh seed. The generator (`src/sim/trackGenerator.ts`) builds each lap from straights
+and arcs, hairpins included, and rejects layouts with corners tighter than 24 m, sections that
+come too close, a curved start, or a lap that leaves the valley. The fastest lap ever driven is stored as the track record. When a
 race ends, a full-screen report compares every racer: result, pace, driving, racecraft, and
 decision-model metrics, with position and speed charts, lap times, and a JSON export. The menu's
 "Full report" button reopens it.

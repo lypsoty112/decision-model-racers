@@ -4,8 +4,9 @@
  * `RaceSettings` is everything the menu configures. `TRACK` is the single circuit, built once and
  * shared by every race. `createRace` fills the grid with the chosen CPU type: `BotDriver`s whose
  * grip and pace rise evenly across the difficulty range from pole to the back row (so the
- * strongest bots fight through the field), or one `ModelDriver` per chosen OpenRouter decision
- * model (up to MAX_MODELS), named after the model. When `participate` is set, it slots the
+ * strongest bots fight through the field), or one `ModelDriver` per `ModelEntry` (up to
+ * MAX_MODELS entries, at most MAX_COPIES of one model), named "<model> · <style>" with a number
+ * added when the same model and style repeat. When `participate` is set, it slots the
  * keyboard racer into the middle of the grid. `canStart` refuses an empty grid and, while the
  * OpenRouter key is invalid or out of credits, any decision-model race; `lapsFor` caps
  * decision-model races at MODEL_MAX_LAPS.
@@ -13,18 +14,20 @@
  */
 import type { TimeOfDay } from '../render/environment';
 import { Keyboard, KeyboardDriver } from '../input/keyboard';
+import type { DrivingStyle } from '../models/decisionState';
 import { type DecisionModelInfo, type KeyStatus, keyUsable, ModelDriver } from '../models/modelDriver';
 import { BotDriver } from '../sim/botDriver';
 import { Race, type RacerSetup } from '../sim/race';
 import { DEFAULT_TRACK, Track } from '../sim/track';
 
 export type Difficulty = 'rookie' | 'pro' | 'legend';
+export type ModelEntry = DecisionModelInfo & { style: DrivingStyle };
 
 export type RaceSettings = {
   laps: number;
   cpu: 'bots' | 'models';
   bots: number;
-  models: DecisionModelInfo[];
+  models: ModelEntry[];
   participate: boolean;
   playerName: string;
   playerColor: string;
@@ -35,6 +38,7 @@ export type RaceSettings = {
 export const PLAYER_ID = 'player';
 export const MAX_BOTS = 11;
 export const MAX_MODELS = 5;
+export const MAX_COPIES = 3;
 export const MODEL_MAX_LAPS = 1;
 export const PLAYER_COLORS = ['#e63946', '#ff9f1c', '#2ec4b6', '#3a86ff', '#8338ec', '#ffbe0b', '#f15bb5', '#f1faee'];
 export const TRACK = new Track(DEFAULT_TRACK, 9);
@@ -51,7 +55,7 @@ export const DEFAULT_SETTINGS: RaceSettings = {
   laps: 3,
   cpu: 'bots',
   bots: 7,
-  models: [{ id: 'typesafe/jev-1.13', name: 'Jev 1.13', promptPrice: 0.042 }],
+  models: [{ id: 'typesafe/jev-1.13', name: 'Jev 1.13', promptPrice: 0.042, style: 'balanced' }],
   participate: true,
   playerName: 'You',
   playerColor: PLAYER_COLORS[0],
@@ -82,7 +86,15 @@ export function createRace(settings: RaceSettings, keyboard: Keyboard): Race {
       };
     });
   const models = (): RacerSetup[] =>
-    settings.models.map((model, i) => ({ id: `model-${i + 1}`, name: model.name, color: BOT_COLORS[i], driver: new ModelDriver(model.id) }));
+    settings.models.map((model, i) => {
+      const twins = settings.models.slice(0, i).filter((other) => other.id === model.id && other.style === model.style).length;
+      return {
+        id: `model-${i + 1}`,
+        name: `${model.name} · ${model.style}${twins ? ` ${twins + 1}` : ''}`,
+        color: BOT_COLORS[i],
+        driver: new ModelDriver(model.id, model.style),
+      };
+    });
   const setups = settings.cpu === 'models' ? models() : bots();
   if (settings.participate) {
     setups.splice(Math.floor(setups.length / 2), 0, {

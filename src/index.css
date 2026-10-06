@@ -1,6 +1,8 @@
 /*
  * Global styles: full-screen canvas, the soft translucent HUD panels, the speedometer, the
- * countdown, the telemetry panel, the between-races menu, and the post-race report.
+ * countdown, the telemetry panel, the between-races menu, the post-race report, and the touch
+ * controls. On touch screens (a coarse pointer) the HUD switches to a compact layout that leaves
+ * room for the thumbs and keeps clear of the screen's safe-area insets.
  */
 :root {
   --ink: #f4f7fb;
@@ -30,10 +32,18 @@ body,
   overflow: hidden;
 }
 
+html {
+  touch-action: manipulation;
+}
+
 .app,
 .viewport {
   position: absolute;
   inset: 0;
+}
+
+.viewport {
+  touch-action: none;
 }
 
 .viewport canvas {
@@ -606,24 +616,60 @@ code {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.model-list label {
+.model-list li {
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   align-items: center;
   gap: 10px;
-  padding: 5px 8px;
+  padding: 4px 4px 4px 8px;
   border-radius: 8px;
   color: var(--ink);
   font-weight: 600;
-  cursor: pointer;
 }
 
-.model-list label:hover {
+.model-list li:hover {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.model-list input {
-  accent-color: var(--accent);
+.model-grid {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.model-grid li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 270px) auto;
+  align-items: center;
+  gap: 6px 10px;
+  color: var(--ink);
+}
+
+@media (max-width: 600px) {
+  .model-grid li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .model-grid .segmented {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+}
+
+.model-grid .segmented button {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.hint a {
+  color: var(--cool);
 }
 
 .model-list code {
@@ -941,5 +987,204 @@ code {
   .hints,
   .telemetry {
     display: none;
+  }
+}
+
+.touch-controls {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .touch-controls {
+    position: absolute;
+    inset: 0;
+    display: block;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .touch-controls button {
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 800;
+    pointer-events: auto;
+    touch-action: none;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .touch-actions {
+    position: absolute;
+    top: 60px;
+    right: max(12px, env(safe-area-inset-right));
+    display: flex;
+    gap: 6px;
+  }
+
+  .touch-actions button {
+    padding: 7px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+  }
+
+  .touch-pad {
+    position: absolute;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
+  .touch-pad.steer {
+    left: max(12px, env(safe-area-inset-left));
+  }
+
+  .touch-pad.pedals {
+    right: max(12px, env(safe-area-inset-right));
+  }
+
+  .touch-pad button {
+    width: 76px;
+    height: 76px;
+    border-radius: 22px;
+    font-size: 26px;
+  }
+
+  .touch-pad.pedals button {
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .touch-pad.pedals button:last-child {
+    height: 104px;
+    background: rgba(255, 209, 102, 0.3);
+  }
+
+  .touch-pad button:active {
+    background: rgba(255, 209, 102, 0.55);
+  }
+
+  .hints,
+  .key-hint,
+  .minimap-legend {
+    display: none;
+  }
+
+  .standings {
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    width: 150px;
+    padding: 4px;
+    font-size: 12px;
+  }
+
+  .standings li {
+    gap: 6px;
+    padding: 2px 6px;
+  }
+
+  .standings li:nth-child(n + 4):not(.focused) {
+    display: none;
+  }
+
+  .standings-gap {
+    font-size: 11px;
+  }
+
+  .lap-panel {
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 4px 12px;
+  }
+
+  .lap-count {
+    font-size: 11px;
+  }
+
+  .lap-count strong {
+    font-size: 22px;
+  }
+
+  .lap-panel dl {
+    margin: 0;
+    font-size: 13px;
+  }
+
+  .lap-panel dt,
+  .lap-panel dd:not(:first-of-type) {
+    display: none;
+  }
+
+  .minimap {
+    top: 100px;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+    padding: 4px;
+  }
+
+  .minimap canvas {
+    width: 110px !important;
+    height: 110px !important;
+  }
+
+  .dash {
+    right: 50%;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    transform: translateX(50%);
+  }
+
+  .position-readout {
+    margin-bottom: 10px;
+  }
+
+  .position-readout strong {
+    font-size: 34px;
+    -webkit-text-stroke-width: 2px;
+  }
+
+  .position-readout span {
+    font-size: 14px;
+  }
+
+  .speedometer {
+    width: 104px;
+  }
+
+  .spectating {
+    top: max(12px, env(safe-area-inset-top));
+    max-width: calc(100% - 24px);
+    overflow: hidden;
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .countdown {
+    font-size: 90px;
+  }
+
+  .warning {
+    font-size: 12px;
+  }
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+  .dash {
+    bottom: 130px;
+  }
+
+  .spectating {
+    top: 230px;
   }
 }

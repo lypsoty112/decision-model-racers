@@ -7,10 +7,11 @@
  * the settings and begins its countdown when `canStart` allows it; `openMenu` pauses a running
  * race behind the menu and `resume` continues it. If the OpenRouter key turns invalid or runs out
  * of credits during a decision-model race, that race is stopped and replaced by the demo race.
- * Global keys: R respawns the player, V and Shift+V cycle the followed racer, C cycles the
- * camera mode while spectating, T toggles telemetry, Escape opens or closes the menu (or the
- * report), and Enter leaves a finished race or starts one from the menu. `installRacerApi` keeps
- * `window.racerAPI` pointed at the live race.
+ * Global keys: R respawns the player (`respawnPlayer`), V and Shift+V cycle the followed racer
+ * (`cycleFocus`), C cycles the camera mode while spectating (`cycleCamera`), T toggles telemetry,
+ * Escape opens or closes the menu (or the report), and Enter leaves a finished race or starts one
+ * from the menu. `TouchControls` offers the same driving and race actions on touch screens.
+ * `installRacerApi` keeps `window.racerAPI` pointed at the live race.
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { installRacerApi } from './api/racerApi';
@@ -24,6 +25,7 @@ import { Menu } from './ui/Menu';
 import { Minimap } from './ui/Minimap';
 import { RaceReport } from './ui/RaceReport';
 import { Telemetry } from './ui/Telemetry';
+import { TouchControls } from './ui/TouchControls';
 
 type Session = { race: Race; demo: boolean };
 
@@ -107,6 +109,20 @@ export default function App() {
     setScreen('race');
   };
 
+  const spectating = !race.racers.some((racer) => racer.id === PLAYER_ID);
+  const cycleCamera = () => setCameraMode((mode) => CAMERA_MODES[(CAMERA_MODES.indexOf(mode) + 1) % CAMERA_MODES.length]);
+
+  const cycleFocus = (step: number) => {
+    const order = race.standings();
+    const current = Math.max(0, order.findIndex((racer) => racer.id === focusId));
+    setFocusId(order[(current + step + order.length) % order.length].id);
+  };
+
+  const respawnPlayer = () => {
+    const player = race.racers.find((racer) => racer.id === PLAYER_ID);
+    if (player && race.phase === 'racing') race.respawn(player);
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.repeat) return;
@@ -116,20 +132,14 @@ export default function App() {
         if (event.code === 'Enter' && event.target === document.body) startRace();
         return;
       }
-      const spectating = !race.racers.some((racer) => racer.id === PLAYER_ID);
-      if (event.code === 'KeyC' && spectating) setCameraMode((mode) => CAMERA_MODES[(CAMERA_MODES.indexOf(mode) + 1) % CAMERA_MODES.length]);
+      if (event.code === 'KeyC' && spectating) cycleCamera();
       if (event.code === 'Escape' || (event.code === 'Enter' && race.phase === 'finished')) {
         event.preventDefault();
         openMenu();
       }
       if (event.code === 'KeyT') setTelemetryOpen((open) => !open);
-      const player = race.racers.find((racer) => racer.id === PLAYER_ID);
-      if (event.code === 'KeyR' && player && race.phase === 'racing') race.respawn(player);
-      if (event.code === 'KeyV') {
-        const order = race.standings();
-        const current = Math.max(0, order.findIndex((racer) => racer.id === focusId));
-        setFocusId(order[(current + (event.shiftKey ? -1 : 1) + order.length) % order.length].id);
-      }
+      if (event.code === 'KeyR') respawnPlayer();
+      if (event.code === 'KeyV') cycleFocus(event.shiftKey ? -1 : 1);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -143,6 +153,17 @@ export default function App() {
           <Hud race={race} focusId={focusId} cameraMode={cameraMode} onMenu={openMenu} />
           {cameraMode !== 'overhead' && <Minimap race={race} focusId={focusId} />}
           {telemetryOpen && <Telemetry race={race} focusId={focusId} />}
+          {race.phase !== 'finished' && (
+            <TouchControls
+              keyboard={keyboard}
+              spectating={spectating}
+              cameraMode={cameraMode}
+              onMenu={openMenu}
+              onCamera={cycleCamera}
+              onNextRacer={() => cycleFocus(1)}
+              onReset={respawnPlayer}
+            />
+          )}
         </>
       )}
       {screen === 'menu' && (

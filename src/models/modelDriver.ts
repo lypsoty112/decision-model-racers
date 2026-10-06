@@ -6,8 +6,9 @@
  * the model's latest answer and, when no request is in flight, the key is usable, and at least
  * MIN_INTERVAL seconds of race time have passed, starts `ask`, a `POST /api/decide` with the
  * current state, so the race keeps running while the model thinks. Once the racer finishes it
- * stops asking and coasts. `stats` holds decisions, errors, latency (last, total, worst), and
- * cost for the telemetry panel and the race report.
+ * stops asking and coasts. Every request carries the driver's `DrivingStyle`. `stats` holds
+ * decisions, errors, latency (last, total, worst), and cost for the telemetry panel and the
+ * race report.
  *
  * The key status is a tiny store: `getKeyStatus` and `subscribeKeyStatus` back React's
  * `useSyncExternalStore`, `refreshKeyStatus` asks `GET /api/key-status`, and any decision that
@@ -16,7 +17,7 @@
  */
 import type { DecisionsResponse } from '@openrouter/sdk/models';
 import type { Controls, Driver, RacerObservation } from '../sim/types';
-import { DECISION_QUESTIONS, type DecisionAction, describeState, toControls } from './decisionState';
+import { DECISION_QUESTIONS, type DecisionAction, describeState, type DrivingStyle, toControls } from './decisionState';
 
 export type DecisionModelInfo = { id: string; name: string; promptPrice: number };
 export type KeyStatus = { state: 'checking' | 'ok' | 'invalid' | 'no-credits'; message: string; remaining: number | null };
@@ -76,14 +77,16 @@ export function listDecisionModels(): Promise<DecisionModelInfo[]> {
 export class ModelDriver implements Driver {
   readonly kind = 'model';
   readonly model: string;
+  readonly style: DrivingStyle;
   readonly stats = { decisions: 0, errors: 0, latencyMs: 0, totalLatencyMs: 0, maxLatencyMs: 0, cost: 0, lastError: '' };
   private readonly history: DecisionAction[] = [];
   private controls = COAST;
   private inFlight = false;
   private lastAsked = -Infinity;
 
-  constructor(model: string) {
+  constructor(model: string, style: DrivingStyle) {
     this.model = model;
+    this.style = style;
   }
 
   decide(observation: RacerObservation): Controls {
@@ -96,7 +99,7 @@ export class ModelDriver implements Driver {
     this.inFlight = true;
     this.lastAsked = observation.raceTime;
     const started = performance.now();
-    const body = JSON.stringify({ model: this.model, state: describeState(observation, this.history), questions: DECISION_QUESTIONS });
+    const body = JSON.stringify({ model: this.model, state: describeState(observation, this.history, this.style), questions: DECISION_QUESTIONS });
     fetchJson<DecisionsResponse>('/api/decide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
       .then((result) => {
         this.controls = toControls(result.answers);

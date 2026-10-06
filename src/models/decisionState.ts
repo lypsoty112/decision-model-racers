@@ -1,10 +1,11 @@
 /*
  * The protocol between a racer's observation and an OpenRouter decision model.
  *
- * `describeState` turns a `RacerObservation` plus the driver's recent `DecisionAction`s into
- * compact state: placement, lap and lap progress, the current track section and next corner,
- * speed and travel direction, position on the road, the road ahead in car-local metres, nearby
- * cars, a safe speed for the curves ahead, and the last HISTORY_LENGTH actions.
+ * `describeState` turns a `RacerObservation`, the driver's recent `DecisionAction`s, and its
+ * `DrivingStyle` into compact state: placement, lap and lap progress, the current track section
+ * and next corner, speed and travel direction, position on the road, the road ahead in car-local
+ * metres, nearby cars, the driving style with its meaning, a safe speed for the curves ahead
+ * (from the share of the car's grip that style allows), and the last HISTORY_LENGTH actions.
  * `DECISION_QUESTIONS` asks for steering as an ordered score and the pedal as a choice, because a
  * score answer is a probability-weighted mean that never reaches full throttle or zero brake.
  * `toControls` maps the answers onto the same throttle, brake, and steer a human uses.
@@ -14,9 +15,18 @@ import { CAR_SPEC } from '../sim/car';
 import type { Controls, RacerObservation } from '../sim/types';
 
 export type DecisionAction = Controls & { raceTime: number; speed: number };
+export type DrivingStyle = 'safe' | 'balanced' | 'aggressive';
+
+export const DRIVING_STYLES: Record<DrivingStyle, { grip: number; meaning: string }> = {
+  safe: { grip: 0.75, meaning: 'Finish cleanly. Brake early, keep a margin to the road edge, and avoid contact with other cars.' },
+  balanced: { grip: 0.83, meaning: 'Race hard but tidy. Take normal racing lines and only pass when there is room.' },
+  aggressive: {
+    grip: 0.92,
+    meaning: 'Win at all costs. Carry maximum speed, brake late, take tight lines, and attack every car ahead even at the risk of running wide.',
+  },
+};
 
 const HISTORY_LENGTH = 4;
-const SAFE_GRIP = CAR_SPEC.grip * 0.83;
 const STEER_LEVELS = ['hard left', 'left', 'slight left', 'straight', 'slight right', 'right', 'hard right'];
 const STEER_CENTRE = (STEER_LEVELS.length - 1) / 2;
 const PEDALS: Record<string, { throttle: number; brake: number; meaning: string }> = {
@@ -45,7 +55,7 @@ export const DECISION_QUESTIONS: Record<'steer' | 'pedal', DecisionsScoreQuestio
   },
 };
 
-export function describeState(observation: RacerObservation, history: DecisionAction[]) {
+export function describeState(observation: RacerObservation, history: DecisionAction[], style: DrivingStyle) {
   const o = observation;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   const inside = o.track.corners.find((corner) => corner.distance < 0);
@@ -77,7 +87,8 @@ export function describeState(observation: RacerObservation, history: DecisionAc
       .filter((other) => other.distance < 40)
       .slice(0, 3)
       .map((other) => ({ ahead_m: +other.z.toFixed(1), right_m: +other.x.toFixed(1), speed_diff_kmh: Math.round(other.relativeSpeed * 3.6) })),
-    guidance: { safe_speed_kmh_for_upcoming_curves: Math.round(Math.sqrt(SAFE_GRIP / sharpest) * 3.6) },
+    driving_style: { style, meaning: DRIVING_STYLES[style].meaning },
+    guidance: { safe_speed_kmh_for_upcoming_curves: Math.round(Math.sqrt((CAR_SPEC.grip * DRIVING_STYLES[style].grip) / sharpest) * 3.6) },
     previous_actions: history.slice(-HISTORY_LENGTH).map((action) => ({
       seconds_ago: +(o.raceTime - action.raceTime).toFixed(1),
       steer: +action.steer.toFixed(2),

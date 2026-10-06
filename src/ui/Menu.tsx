@@ -6,12 +6,26 @@
  * colour. Decision-model races are capped at MODEL_MAX_LAPS laps. Each time the menu opens it
  * re-checks the OpenRouter key and blocks decision-model races while the key is invalid or out of
  * credits. It offers Resume while a race is paused behind it, and after a race it shows the final
- * standings with a button to reopen the full report. `Segmented` renders a row of mutually
- * exclusive choices as a radio group. `ModelPicker` loads the decision-model catalogue and lets
- * the player tick up to MAX_MODELS models.
+ * standings with a button to reopen the full report, and it links the source on GitHub.
+ * `Segmented` renders a row of mutually exclusive choices as a radio group. `ModelPicker` loads
+ * the decision-model catalogue and lets the player add up to MAX_MODELS entries, at most
+ * MAX_COPIES of one model, each with its own driving style.
  */
 import { useEffect, useState } from 'react';
-import { canStart, lapsFor, MAX_BOTS, MAX_MODELS, MODEL_MAX_LAPS, PLAYER_COLORS, PLAYER_ID, type RaceSettings, TRACK } from '../game/setup';
+import {
+  canStart,
+  lapsFor,
+  MAX_BOTS,
+  MAX_COPIES,
+  MAX_MODELS,
+  type ModelEntry,
+  MODEL_MAX_LAPS,
+  PLAYER_COLORS,
+  PLAYER_ID,
+  type RaceSettings,
+  TRACK,
+} from '../game/setup';
+import { DRIVING_STYLES, type DrivingStyle } from '../models/decisionState';
 import { type DecisionModelInfo, type KeyStatus, keyUsable, listDecisionModels, refreshKeyStatus } from '../models/modelDriver';
 import { TIME_PRESETS, type TimeOfDay } from '../render/environment';
 import type { Racer } from '../sim/race';
@@ -48,7 +62,9 @@ function Segmented<T extends string | boolean>({ label, value, options, onSelect
   );
 }
 
-type ModelPickerProps = { selected: DecisionModelInfo[]; onChange: (models: DecisionModelInfo[]) => void };
+type ModelPickerProps = { selected: ModelEntry[]; onChange: (models: ModelEntry[]) => void };
+
+const STYLE_OPTIONS = (Object.keys(DRIVING_STYLES) as DrivingStyle[]).map((style): [DrivingStyle, string] => [style, style[0].toUpperCase() + style.slice(1)]);
 
 function ModelPicker({ selected, onChange }: ModelPickerProps) {
   const [catalogue, setCatalogue] = useState<DecisionModelInfo[] | null>(null);
@@ -56,30 +72,44 @@ function ModelPicker({ selected, onChange }: ModelPickerProps) {
   useEffect(() => {
     listDecisionModels().then(setCatalogue, (reason: unknown) => setError(String(reason)));
   }, []);
-  const chosen = new Set(selected.map((model) => model.id));
-  const toggle = (model: DecisionModelInfo) =>
-    onChange(chosen.has(model.id) ? selected.filter((other) => other.id !== model.id) : [...selected, model]);
+  const copiesOf = (model: DecisionModelInfo) => selected.filter((entry) => entry.id === model.id).length;
+  const setStyle = (index: number, style: DrivingStyle) => onChange(selected.map((entry, i) => (i === index ? { ...entry, style } : entry)));
 
   if (error) return <p className="model-error">Couldn't load decision models: {error}</p>;
   if (!catalogue) return <p className="hint">Loading decision models from OpenRouter…</p>;
   return (
-    <ul className="model-list">
-      {catalogue.map((model) => (
-        <li key={model.id}>
-          <label>
-            <input
-              type="checkbox"
-              checked={chosen.has(model.id)}
-              disabled={!chosen.has(model.id) && selected.length >= MAX_MODELS}
-              onChange={() => toggle(model)}
-            />
+    <>
+      {selected.length > 0 && (
+        <ol className="model-grid">
+          {selected.map((entry, i) => (
+            <li key={i}>
+              <span className="model-name">{entry.name}</span>
+              <Segmented label={`${entry.name} driving style`} value={entry.style} options={STYLE_OPTIONS} onSelect={(style) => setStyle(i, style)} />
+              <button type="button" className="button secondary small" onClick={() => onChange(selected.filter((_, j) => j !== i))}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <ul className="model-list">
+        {catalogue.map((model) => (
+          <li key={model.id}>
             <span className="model-name">{model.name}</span>
             <code>{model.id}</code>
             <span className="muted">${model.promptPrice.toFixed(3)}/M</span>
-          </label>
-        </li>
-      ))}
-    </ul>
+            <button
+              type="button"
+              className="button secondary small"
+              disabled={copiesOf(model) >= MAX_COPIES || selected.length >= MAX_MODELS}
+              onClick={() => onChange([...selected, { ...model, style: 'balanced' }])}
+            >
+              Add
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -241,7 +271,10 @@ export function Menu({ settings, keyStatus, onChange, onStart, onResume, onRepor
 
         <p className="hint">
           Decision models: every racer streams a <code>RacerObservation</code>. Swap any driver from the console with{' '}
-          <code>racerAPI.setController(id, obs =&gt; controls)</code>, or run races headless with <code>bun run sim</code>.
+          <code>racerAPI.setController(id, obs =&gt; controls)</code>, or run races headless with <code>bun run sim</code>.{' '}
+          <a href="https://github.com/lypsoty112/decision-model-racers" target="_blank" rel="noreferrer">
+            Source on GitHub
+          </a>
         </p>
       </div>
 

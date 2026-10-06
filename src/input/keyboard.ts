@@ -3,8 +3,9 @@
  *
  * `Keyboard` tracks held key codes through window listeners that `attach` installs and the
  * returned function removes; it stops arrow keys and Space from scrolling unless the event
- * comes from a form field. `KeyboardDriver` maps WASD or the arrow keys (Space also brakes) to
- * raw -1/0/1 `Controls`; the car model smooths steering itself.
+ * comes from a form field. `hold` presses or releases a code directly, which is how the
+ * on-screen touch buttons drive the same keys. `KeyboardDriver` maps WASD or the arrow keys
+ * (Space also brakes) to raw -1/0/1 `Controls`; the car model smooths steering itself.
  */
 import type { Controls, Driver } from '../sim/types';
 
@@ -29,6 +30,11 @@ export class Keyboard {
       target.removeEventListener('keyup', up);
       target.removeEventListener('blur', clear);
     };
+  }
+
+  hold(code: string, held: boolean): void {
+    if (held) this.held.add(code);
+    else this.held.delete(code);
   }
 
   isHeld(...codes: string[]): boolean {

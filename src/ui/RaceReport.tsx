@@ -1,8 +1,8 @@
 /*
  * The full-screen post-race report.
  *
- * `RaceReport` summarizes every racer once with `summarize`, adding `modelSummary` (decisions,
- * rate, latency, errors, cost) for racers driven by an OpenRouter model. It lays out highlight
+ * `RaceReport` summarizes every racer once with `summarize`, adding `modelSummary` (model, driving
+ * style, decisions, rate, latency, errors, cost) for racers driven by an OpenRouter model. It lays out highlight
  * cards chosen by `leaderOf`, two `LineChart`s (race position over time, and speed around the
  * lap), the metrics grid where each row comes from METRICS and the best value is marked, and the
  * lap-times table. "Copy JSON" exports every summary; "Back to menu" closes it.
@@ -68,10 +68,11 @@ const METRICS: Metric[] = [
 
 function modelSummary(racer: Racer) {
   if (!(racer.driver instanceof ModelDriver)) return null;
-  const { stats, model } = racer.driver;
+  const { stats, model, style } = racer.driver;
   const answered = Math.max(1, stats.decisions + stats.errors);
   return {
     model,
+    style,
     decisions: stats.decisions,
     decisionsPerSecond: stats.decisions / Math.max(racer.stats.racingTime, 1e-6),
     averageLatencyMs: stats.totalLatencyMs / answered,

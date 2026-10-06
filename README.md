@@ -28,6 +28,10 @@ bun run lint
 | `Esc` | Pause and open the menu |
 | `Enter` | Start a race from the menu, or leave the results screen |
 
+On a touch screen the HUD switches to a compact layout with on-screen controls: steer left and
+right under the left thumb, brake and gas under the right, and Menu, Reset, Camera, and Next
+buttons at the top right.
+
 The menu between races sets the lap count, racing or spectating, the CPU type, the time of day,
 and your name and kart colour. The fastest lap ever driven is stored as the track record. When a
 race ends, a full-screen report compares every racer: result, pace, driving, racecraft, and
@@ -37,8 +41,11 @@ decision-model metrics, with position and speed charts, lap times, and a JSON ex
 ## Racing OpenRouter decision models
 
 Put `OPENROUTER_API_KEY=...` in `.env` (gitignored), then set CPU to "Decision models" in the
-menu and tick up to five of the models OpenRouter lists with the `decisions` output modality,
-such as `typesafe/jev-1.13`. Decision-model races are one lap. If OpenRouter reports the key as
+menu and add up to five of the models OpenRouter lists with the `decisions` output modality,
+such as `typesafe/jev-1.13`. You can add the same model up to three times, and give each entry a
+driving style: safe, balanced, or aggressive. The style and its meaning go into the model's
+state, and the style also scales the safe speed the state suggests for the curves ahead.
+Decision-model races are one lap. If OpenRouter reports the key as
 invalid or out of credits, the race stops and the menu blocks decision-model races until the key
 works again. Each model races in real time: the dev server forwards its state to
 OpenRouter's System One API (`server/decisionApi.ts`), so the key never reaches the browser. The

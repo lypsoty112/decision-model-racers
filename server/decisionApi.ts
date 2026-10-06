@@ -37,7 +37,7 @@ async function checkKey(openRouter: OpenRouter) {
     if (statusOf(error) === 401) return null;
     throw error;
   });
-  if (!metadata) return { state: 'invalid', message: 'OpenRouter rejected the API key in .env.', remaining: null };
+  if (!metadata) return { state: 'invalid', message: 'OpenRouter rejected the configured API key (OPENROUTER_API_KEY).', remaining: null };
   const balance = await openRouter.credits.getCredits().then(
     ({ data }) => data.totalCredits - data.totalUsage,
     (error: unknown) => {

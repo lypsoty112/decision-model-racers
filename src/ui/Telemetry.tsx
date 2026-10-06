@@ -2,8 +2,8 @@
  * Live view of the `RacerObservation` the focused racer's driver receives, which is exactly what
  * a decision model gets through `window.racerAPI`.
  *
- * `Telemetry` refreshes ten times a second and lists the core state (plus model id, decisions,
- * latency, cost, and errors for an OpenRouter decision model), the controls as bars, the corners
+ * `Telemetry` refreshes ten times a second and lists the core state (plus model id, driving
+ * style, decisions, latency, cost, and errors for an OpenRouter decision model), the controls as bars, the corners
  * ahead, and the nearest opponents. "Copy JSON" puts the full observation on the
  * clipboard. `Bar` draws a signed or unsigned value as a filled track.
  */
@@ -83,6 +83,8 @@ export function Telemetry({ race, focusId }: TelemetryProps) {
             <dd>
               <code>{racer.driver.model}</code>
             </dd>
+            <dt>style</dt>
+            <dd>{racer.driver.style}</dd>
             <dt>decisions</dt>
             <dd>
               {racer.driver.stats.decisions} · last {racer.driver.stats.latencyMs.toFixed(0)} ms

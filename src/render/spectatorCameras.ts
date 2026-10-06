@@ -2,7 +2,9 @@
  * The spectator cameras: a whole-track overhead view and a TV director.
  *
  * `OverheadCamera` frames the entire circuit from high above, tilted OVERHEAD_TILT radians
- * towards the viewer for depth; `resize` moves it so the track fits any aspect ratio.
+ * towards the viewer for depth; `resize` moves it so the track fits any aspect ratio. On a
+ * portrait screen it turns a quarter and widens the vertical field of view, so the track's long
+ * side runs down the screen at the same distance as in landscape, well inside the fog.
  * `TvCamera` films from trackside posts placed every POST_SPACING metres on the outside of the
  * next bend, raised above the hedges. Every DIRECTOR_INTERVAL seconds `pickSubject` chooses the
  * chasing car of the closest battle under BATTLE_GAP metres, or else the leader. The active post
@@ -43,10 +45,15 @@ export class OverheadCamera {
   }
 
   resize(width: number, height: number): void {
-    this.camera.aspect = width / height;
-    const span = Math.max(this.depth, this.width / this.camera.aspect) * OVERHEAD_MARGIN;
-    const distance = span / (2 * Math.tan(MathUtils.degToRad(OVERHEAD_FOV / 2)));
-    this.camera.position.set(this.center.x, distance * Math.cos(OVERHEAD_TILT), this.center.z + distance * Math.sin(OVERHEAD_TILT));
+    const aspect = width / height;
+    const portrait = aspect < 1;
+    const stretch = portrait ? 1 / aspect : aspect;
+    const tanHalf = Math.tan(MathUtils.degToRad(OVERHEAD_FOV / 2));
+    const distance = (Math.max(this.depth, this.width / stretch) * OVERHEAD_MARGIN) / (2 * tanHalf);
+    const lean = distance * Math.sin(OVERHEAD_TILT);
+    this.camera.aspect = aspect;
+    this.camera.fov = portrait ? MathUtils.radToDeg(2 * Math.atan(tanHalf * stretch)) : OVERHEAD_FOV;
+    this.camera.position.set(this.center.x + (portrait ? lean : 0), distance * Math.cos(OVERHEAD_TILT), this.center.z + (portrait ? 0 : lean));
     this.camera.lookAt(this.center);
     this.camera.updateProjectionMatrix();
   }

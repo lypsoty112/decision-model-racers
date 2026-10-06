@@ -124,16 +124,16 @@ export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
         <div className="spectating">
           {CAMERA_LABELS[cameraMode]} · {cameraMode === 'tv' ? 'director on' : 'following'} <strong style={{ color: focused.color }}>{focused.name}</strong>
           {cameraMode !== 'tv' && (
-            <>
+            <span className="key-hint">
               {' '}
               · <kbd>V</kbd> next racer
-            </>
+            </span>
           )}
           {spectating && (
-            <>
+            <span className="key-hint">
               {' '}
               · <kbd>C</kbd> camera
-            </>
+            </span>
           )}
         </div>
       )}

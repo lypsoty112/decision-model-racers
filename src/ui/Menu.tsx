@@ -1,7 +1,7 @@
 /*
  * Between-races menu: race configuration, the stored track record, and the last race's results.
  *
- * `Menu` edits `RaceSettings`: single race or tournament (with its round count), the track
+ * `Menu` edits `RaceSettings`: single race or tournament (with its round count), damage, the track
  * (Meadow Ring, or a random track with a length,
  * complexity, and a New track button for a fresh seed; the title shows the selected track's name,
  * length, corners, seed, and record), lap count, racing or spectating, the CPU type (bots with a
@@ -169,7 +169,7 @@ export function Menu({ settings, keyStatus, onChange, onStart, onResume, onRepor
             </p>
           )}
           <div className="menu-grid" hidden={nextRound !== null}>
-            <div className={settings.mode === 'tournament' ? 'field' : 'field wide'}>
+            <div className="field">
               <span>Mode</span>
               <Segmented
                 label="Mode"
@@ -181,8 +181,20 @@ export function Menu({ settings, keyStatus, onChange, onStart, onResume, onRepor
                 onSelect={(mode) => update({ mode })}
               />
             </div>
+            <div className="field">
+              <span>Damage</span>
+              <Segmented
+                label="Damage"
+                value={settings.damage}
+                options={[
+                  [false, 'Off'],
+                  [true, 'On'],
+                ]}
+                onSelect={(damage) => update({ damage })}
+              />
+            </div>
             {settings.mode === 'tournament' && (
-              <label className="field">
+              <label className="field wide">
                 <span>
                   Rounds <strong>{settings.rounds}</strong>
                 </span>

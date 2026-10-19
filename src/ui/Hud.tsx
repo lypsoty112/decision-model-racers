@@ -1,8 +1,9 @@
 /*
  * The in-race heads-up display, refreshed 20 times a second from the mutable race.
  *
- * `Hud` lays out the standings tower, the lap and timing panel, the countdown, warnings (wrong
- * way, off track, slipstream), the big position read-out with the `Speedometer` arc gauge, a
+ * `Hud` lays out the standings tower (wrecked racers marked), the lap and timing panel, the
+ * countdown, warnings (wrecked, wrong way, off track, slipstream), the big position read-out with
+ * a health bar when damage is on, the `Speedometer` arc gauge, a
  * spectating banner naming the camera mode and the racer it follows, and the full-screen
  * `RaceReport` once the race is over. `gapText` estimates each racer's gap to the leader from the leader's
  * average pace. The fastest lap of the session is offered to the stored track record.
@@ -10,7 +11,8 @@
 import { useEffect, useState } from 'react';
 import { PLAYER_ID } from '../game/setup';
 import type { CameraMode } from '../render/engine';
-import { CAR_SPEC } from '../sim/car';
+import { DAMAGE_STAGES } from '../render/carModel';
+import { CAR_SPEC, MAX_HEALTH } from '../sim/car';
 import type { Race, Racer } from '../sim/race';
 import { formatTime, ordinal, readTrackRecord, submitLap } from './format';
 import { RaceReport } from './RaceReport';
@@ -78,7 +80,7 @@ export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
             <span className="standings-position">{racer.position}</span>
             <span className="swatch" style={{ background: racer.color }} />
             <span className="standings-name">{racer.name}</span>
-            <span className="standings-gap">{gapText(race, racer, leader)}</span>
+            <span className={racer.wreckTime > 0 ? 'standings-gap wrecked' : 'standings-gap'}>{racer.wreckTime > 0 ? 'Wrecked' : gapText(race, racer, leader)}</span>
           </li>
         ))}
       </ol>
@@ -107,6 +109,7 @@ export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
       {race.phase === 'racing' && race.time < 1 && <div className="countdown go">GO!</div>}
 
       <div className="warnings">
+        {focused.wreckTime > 0 && <span className="warning danger">Wrecked</span>}
         {observation.wrongWay && observation.speed > 2 && <span className="warning danger">Wrong way</span>}
         {observation.offTrack && !observation.finished && <span className="warning">Off track</span>}
         {observation.slipstream > 0.25 && observation.speed > 10 && <span className="warning boost">Slipstream</span>}
@@ -116,6 +119,11 @@ export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
         <div className="position-readout">
           <strong>{ordinal(focused.position)}</strong>
           <span>/{race.racers.length}</span>
+          {race.damage && (
+            <div className="health" role="meter" aria-label="Health" aria-valuemin={0} aria-valuemax={MAX_HEALTH} aria-valuenow={Math.round(focused.car.health)}>
+              <span style={{ width: `${(focused.car.health / MAX_HEALTH) * 100}%` }} className={focused.car.health < DAMAGE_STAGES.burning ? 'critical' : undefined} />
+            </div>
+          )}
         </div>
         <Speedometer speed={focused.car.speed} />
       </div>

@@ -12,6 +12,12 @@
  * `stats` for the post-race report. Non-human
  * racers that stay slow or face backwards for STUCK_LIMIT seconds are respawned on the
  * centreline. The race ends when everyone finishes or FINISH_GRACE seconds after the winner.
+ *
+ * With `damage` on, `harm` takes health from a racer still racing for every step it hits a wall
+ * faster than WALL_SAFE metres per second, and for every new car contact closing faster than
+ * CONTACT_SAFE (cars rubbing side by side only take the first hit).
+ * A car at zero health is wrecked: it gets no controls and skids to a stop for WRECK_TIME
+ * seconds, then respawns with full health.
  */
 import { CAR_SPEC, type CarState, createCar, isFacingBackwards, stepCar } from './car';
 import { observe } from './observation';
@@ -27,6 +33,12 @@ const STUCK_LIMIT = 3;
 const GRID_SPACING = 5;
 const DRAFT_RANGE = 30;
 const DRAFT_WIDTH = 2.2;
+const WALL_SAFE = 4;
+const WALL_DAMAGE = 3;
+const CONTACT_SAFE = 4;
+const CONTACT_DAMAGE = 4;
+export const WRECK_TIME = 3;
+const WRECK_DRAG = 3;
 
 export type RacerSetup = { id: string; name: string; color: string; driver: Driver };
 
@@ -42,6 +54,7 @@ export type Racer = RacerSetup & {
   position: number;
   respawns: number;
   stuckTime: number;
+  wreckTime: number;
   controls: Controls;
   speedProfile: Float32Array;
   stats: RacerStats;
@@ -50,6 +63,7 @@ export type Racer = RacerSetup & {
 export class Race {
   readonly track: Track;
   readonly totalLaps: number;
+  readonly damage: boolean;
   readonly racers: Racer[];
   phase: RacePhase = 'grid';
   time = -COUNTDOWN;
@@ -58,9 +72,10 @@ export class Race {
   private winnerTime: number | null = null;
   private touching = new Set<string>();
 
-  constructor(track: Track, setups: RacerSetup[], totalLaps: number) {
+  constructor(track: Track, setups: RacerSetup[], totalLaps: number, damage: boolean) {
     this.track = track;
     this.totalLaps = totalLaps;
+    this.damage = damage;
     this.racers = setups.map((setup, i) => {
       const s = -GRID_SPACING * (i + 1);
       return {
@@ -76,6 +91,7 @@ export class Race {
         position: i + 1,
         respawns: 0,
         stuckTime: 0,
+        wreckTime: 0,
         controls: { throttle: 0, brake: 0, steer: 0 },
         speedProfile: new Float32Array(Math.ceil(track.length / PROFILE_BIN)),
         stats: createStats(i + 1),
@@ -104,10 +120,14 @@ export class Race {
     this.updateDrafts();
     for (const racer of this.racers) {
       const decided = racer.driver.decide(this.observe(racer), SIM_STEP);
-      racer.controls = released ? sanitize(decided) : { throttle: 0, brake: 0, steer: 0 };
+      const wrecked = racer.wreckTime > 0;
+      racer.controls = released && !wrecked ? sanitize(decided) : { throttle: 0, brake: 0, steer: 0 };
+      if (wrecked) racer.car.speed *= Math.exp(-WRECK_DRAG * SIM_STEP);
       const previousS = racer.car.s;
       stepCar(racer.car, racer.controls, this.track, SIM_STEP);
       racer.progress += this.track.signedDistance(previousS, racer.car.s);
+      this.harm(racer, (racer.car.wallImpact - WALL_SAFE) * WALL_DAMAGE);
+      if (wrecked && (racer.wreckTime -= SIM_STEP) <= 0) this.respawn(racer);
     }
     this.resolveContacts();
     for (const racer of this.racers) {
@@ -137,7 +157,17 @@ export class Race {
   respawn(racer: Racer): void {
     Object.assign(racer.car, createCar(this.track, racer.car.s, 0));
     racer.stuckTime = 0;
+    racer.wreckTime = 0;
     racer.respawns++;
+  }
+
+  private harm(racer: Racer, amount: number): void {
+    if (!this.damage || amount <= 0 || this.phase !== 'racing' || racer.finishTime !== null || racer.wreckTime > 0) return;
+    racer.car.health = Math.max(0, racer.car.health - amount);
+    racer.stats.damageTaken += amount;
+    if (racer.car.health > 0) return;
+    racer.wreckTime = WRECK_TIME;
+    racer.stats.wrecks++;
   }
 
   private updateLaps(racer: Racer): void {
@@ -158,7 +188,7 @@ export class Race {
   }
 
   private updateStuck(racer: Racer): void {
-    if (this.phase !== 'racing' || racer.driver.kind === 'human') return;
+    if (this.phase !== 'racing' || racer.driver.kind === 'human' || racer.wreckTime > 0) return;
     const stuck = Math.abs(racer.car.speed) < 2 || isFacingBackwards(racer.car, this.track);
     racer.stuckTime = stuck ? racer.stuckTime + SIM_STEP : 0;
     if (racer.stuckTime > STUCK_LIMIT) this.respawn(racer);
@@ -208,6 +238,10 @@ export class Race {
         const alongB = Math.sin(b.yaw) * nx + Math.cos(b.yaw) * nz;
         const closing = a.speed * alongA - b.speed * alongB;
         if (closing <= 0) continue;
+        if (!this.touching.has(pair)) {
+          this.harm(this.racers[i], (closing - CONTACT_SAFE) * CONTACT_DAMAGE);
+          this.harm(this.racers[j], (closing - CONTACT_SAFE) * CONTACT_DAMAGE);
+        }
         const impulse = closing * 0.65;
         a.speed -= impulse * alongA;
         b.speed += impulse * alongB;

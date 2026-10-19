@@ -46,6 +46,7 @@ export type RaceSettings = {
   playerColor: string;
   difficulty: Difficulty;
   timeOfDay: TimeOfDay;
+  damage: boolean;
 };
 
 export const PLAYER_ID = 'player';
@@ -96,6 +97,7 @@ export const DEFAULT_SETTINGS: RaceSettings = {
   playerColor: PLAYER_COLORS[0],
   difficulty: 'pro',
   timeOfDay: 'morning',
+  damage: false,
 };
 
 export const demoSettings = (settings: RaceSettings): RaceSettings => ({
@@ -160,5 +162,5 @@ export function createRace(settings: RaceSettings, keyboard: Keyboard): Race {
       driver: new KeyboardDriver(keyboard),
     });
   }
-  return new Race(trackFor(settings), shuffle(setups), lapsFor(settings));
+  return new Race(trackFor(settings), shuffle(setups), lapsFor(settings), settings.damage);
 }

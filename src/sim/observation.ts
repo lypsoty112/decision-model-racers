@@ -54,6 +54,7 @@ export function observe(race: Race, racer: Racer): RacerObservation {
     trackHalfWidth: track.halfWidth,
     offTrack: !car.onRoad,
     slipstream: car.draft,
+    health: car.health,
     wrongWay: Math.abs(headingError) > WRONG_WAY_ANGLE,
     respawns: racer.respawns,
     world: { x: car.x, y: car.y, z: car.z, yaw: car.yaw },
@@ -89,6 +90,7 @@ export function observe(race: Race, racer: Racer): RacerObservation {
           lateralOffset: other.car.lateral,
           speed: other.car.speed,
           relativeSpeed: other.car.speed - car.speed,
+          health: other.car.health,
         };
       })
       .sort((a, b) => a.distance - b.distance),

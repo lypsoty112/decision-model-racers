@@ -5,7 +5,9 @@
  * race. `buildWorld` makes the track-dependent part (landscape, track meshes, and the overhead
  * and TV cameras) and `setRace` rebuilds it, freeing the old meshes, when the new race runs on a
  * different track. Each animation frame advances the race unless
- * `paused`, poses every `CarModel`, kicks up dust and tyre smoke in `emitTrail`, and films the
+ * `paused`, poses every `CarModel`, kicks up dust and tyre smoke in `emitTrail`, trails soot and
+ * flames from damaged karts in `emitDamage`, sets off `Explosions` when `reactToDamage` sees a kart
+ * shed its wings or wreck (jolting the chase camera when it is the followed kart), and films the
  * race with the camera chosen by `setCameraMode`: the chase camera behind the focused racer
  * (`setFocus`; the leader when the id is unknown), the whole-track overhead view (karts and
  * name tags enlarged by `applyDisplayScale`, fog pushed back by the camera's distance), or the
@@ -16,12 +18,13 @@
  */
 import { Color, Group, Mesh, type MeshToonMaterial, PCFShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
 import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
-import { CAR_SPEC, type CarState } from '../sim/car';
-import type { Race } from '../sim/race';
+import { CAR_SPEC, type CarState, MAX_HEALTH } from '../sim/car';
+import type { Race, Racer } from '../sim/race';
 import type { Track } from '../sim/track';
-import { CarModel } from './carModel';
+import { CarModel, DAMAGE_STAGES } from './carModel';
 import { ChaseCamera } from './chaseCamera';
 import { Environment, type TimeOfDay } from './environment';
+import { Explosions } from './explosion';
 import { buildLandscape } from './landscape';
 import { OverheadCamera, TvCamera } from './spectatorCameras';
 import { Particles, SpeedLines } from './speedEffects';
@@ -29,6 +32,8 @@ import { buildTrackMesh } from './trackMesh';
 
 const DUST = new Color('#cdb98c');
 const SMOKE = new Color('#eef1f6');
+const SOOT = new Color('#4a4650');
+const FLAME = new Color('#ff8c42');
 const OVERHEAD_KART_SCALE = 4;
 const OVERHEAD_LABEL_SCALE = 14;
 
@@ -50,7 +55,9 @@ export class GameEngine {
   private readonly environment: Environment;
   private readonly speedLines = new SpeedLines();
   private readonly particles = new Particles(1500);
+  private readonly explosions = new Explosions(this.particles);
   private readonly models = new Map<string, CarModel>();
+  private readonly health = new Map<string, number>();
   private readonly resizeObserver: ResizeObserver;
   private race: Race;
   private focusId = '';
@@ -66,7 +73,7 @@ export class GameEngine {
     this.outline = new OutlineEffect(this.renderer, { defaultThickness: 0.003, defaultColor: [0.09, 0.1, 0.16] });
     this.outline.autoClear = true;
     this.environment = new Environment(this.scene);
-    this.scene.add(this.world, this.particles.points);
+    this.scene.add(this.world, this.particles.points, this.explosions.group);
     this.buildWorld(race.track);
     this.race = race;
     this.setRace(race);
@@ -86,6 +93,7 @@ export class GameEngine {
       model.dispose();
     }
     this.models.clear();
+    this.health.clear();
     for (const racer of race.racers) {
       const model = new CarModel(racer.color, racer.name);
       this.applyDisplayScale(model);
@@ -154,8 +162,13 @@ export class GameEngine {
     if (!this.paused) this.race.update(dt);
     for (const racer of this.race.racers) {
       this.models.get(racer.id)?.update(racer.car, dt);
-      if (!this.paused) this.emitTrail(racer.car, dt);
+      this.reactToDamage(racer);
+      if (!this.paused) {
+        this.emitTrail(racer.car, dt);
+        this.emitDamage(racer.car, dt);
+      }
     }
+    this.explosions.update(this.paused ? 0 : dt);
     if (this.cameraMode === 'tv') {
       const subjectId = this.tv.update(this.race, dt);
       if (subjectId !== this.focusId) {
@@ -174,6 +187,37 @@ export class GameEngine {
     const intensity = Math.max(0, Math.min(1, (speedRatio - 0.4) / 0.45)) + focused.car.draft * 0.3;
     this.speedLines.render(this.renderer, this.paused || this.cameraMode !== 'chase' ? 0 : intensity, dt, camera.aspect);
   };
+
+  private reactToDamage({ id, car, color }: Racer): void {
+    const previous = this.health.get(id) ?? MAX_HEALTH;
+    this.health.set(id, car.health);
+    if (previous > 0 && car.health <= 0) {
+      this.explosions.burst(car, new Color(color));
+      if (id === this.focusId) this.chase.jolt(0.5);
+    } else if (previous >= DAMAGE_STAGES.shed && car.health < DAMAGE_STAGES.shed) {
+      this.explosions.shed(car, new Color(color));
+    }
+  }
+
+  private emitDamage(car: CarState, dt: number): void {
+    const wrecked = car.health <= 0;
+    if (car.health >= DAMAGE_STAGES.shed || Math.random() > dt * (wrecked ? 40 : 18)) return;
+    const flame = car.health < DAMAGE_STAGES.burning && Math.random() < 0.5;
+    const sin = Math.sin(car.yaw);
+    const cos = Math.cos(car.yaw);
+    this.particles.emit(
+      car.x - sin * 1.3,
+      car.y + 1.1,
+      car.z - cos * 1.3,
+      -sin * car.speed * 0.2 + (Math.random() - 0.5),
+      1.5 + Math.random(),
+      -cos * car.speed * 0.2 + (Math.random() - 0.5),
+      flame ? FLAME : SOOT,
+      flame ? 0.6 : 0.8,
+      flame ? 0.9 : 0.5,
+      flame ? 0.4 : 1.4,
+    );
+  }
 
   private emitTrail(car: CarState, dt: number): void {
     const speed = Math.abs(car.speed);

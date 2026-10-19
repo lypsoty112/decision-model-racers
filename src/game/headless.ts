@@ -3,9 +3,10 @@
  * simulation and a template for offline decision-model comparisons. Run with `bun run sim`.
  *
  * `runRace` steps a race at the fixed simulation rate until it finishes or hits the time limit.
- * The script runs one Meadow Ring race per difficulty and one pro race on each of the
- * RANDOM_TRACKS, prints track facts and a results table for each, and throws (non-zero exit) when
- * any bot fails to finish or needed more than two respawns.
+ * The script runs one Meadow Ring race per difficulty, one pro race on each of the RANDOM_TRACKS,
+ * and one pro Meadow Ring race with damage on, prints track facts and a results table for each,
+ * and throws (non-zero exit) when any bot fails to finish or needed more than two respawns that
+ * were not wrecks.
  */
 import { Keyboard } from '../input/keyboard';
 import type { Race } from '../sim/race';
@@ -39,6 +40,7 @@ const base: RaceSettings = { ...DEFAULT_SETTINGS, participate: false, bots: 8 };
 const races: [string, RaceSettings][] = [
   ...(['rookie', 'pro', 'legend'] as Difficulty[]).map((difficulty): [string, RaceSettings] => [difficulty, { ...base, difficulty }]),
   ...RANDOM_TRACKS.map((randomTrack): [string, RaceSettings] => ['pro', { ...base, circuit: 'random', randomTrack }]),
+  ['pro with damage', { ...base, damage: true }],
 ];
 
 const failures: string[] = [];
@@ -59,12 +61,13 @@ for (const [label, settings] of races) {
       finish: racer.finishTime?.toFixed(2) ?? 'DNF',
       bestLap: racer.bestLap?.toFixed(2) ?? '-',
       respawns: racer.respawns,
+      wrecks: racer.stats.wrecks,
       progress: racer.progress.toFixed(0),
     })),
   );
   for (const racer of race.racers) {
     if (racer.finishTime === null) failures.push(`${label} ${track.name}/${racer.name} did not finish`);
-    if (racer.respawns > 2) failures.push(`${label} ${track.name}/${racer.name} respawned ${racer.respawns} times`);
+    if (racer.respawns - racer.stats.wrecks > 2) failures.push(`${label} ${track.name}/${racer.name} respawned ${racer.respawns} times`);
   }
 }
 

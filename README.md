@@ -49,6 +49,14 @@ points (25, 18, 15, 12, 10, 8, 6, 4, 2, 1 for the top ten, nothing for a DNF), a
 scorecard beside the menu ranks racers by points, then wins, then best finish. The tournament is
 saved in the browser, so a reload picks up at the next round; Abandon ends it early.
 
+Turn Damage on to give every kart 100 HP. Hitting a wall faster than 4 m/s, or another kart at a
+closing speed above 4 m/s, costs health, and a damaged kart loses up to a fifth of its top speed
+and some grip. The kart shows it: the paint scorches, the spoiler bends below 70 HP, the spoiler
+and front wing fly off below 45 HP and it trails smoke, and below 20 HP it burns. At 0 HP it
+explodes, sits as a charred wreck for 3 s, and respawns with full health. The HUD shows the
+followed kart's health, the standings mark wrecked karts, and the report adds damage taken and
+wrecks. Decision models see `health` for themselves and every opponent.
+
 Every race starts from a random grid. Bots ride the slipstream of a car they are catching, then
 commit to the inside of the next corner to pass, braking later while they attack, and the car
 being passed gives them room. A bot stuck behind the same car for too long attacks anyway, and a

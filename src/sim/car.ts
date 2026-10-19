@@ -7,9 +7,11 @@
  * drag, slope, and grass, and `draft` (slipstream, 0 to 1, set by the race) lowers drag and
  * raises top speed; the smoothed steer input turns the car at whichever is smaller of the
  * wheel-angle yaw rate and a steer-proportional share of grip, and steering past the grip limit
- * becomes `slip`, which scrubs speed. `settleOnTrack` then re-projects the car, holds it inside
- * the walls (bleeding speed by impact angle), and sets its height and road grade. `CAR_SPEC`
- * holds the tuning shared with the bot driver.
+ * becomes `slip`, which scrubs speed. Lost `health` (out of MAX_HEALTH, only lost with damage on)
+ * lowers top speed and grip by up to `damageSpeedLoss` and `damageGripLoss`. `settleOnTrack` then
+ * re-projects the car, holds it inside the walls (bleeding speed by impact angle and recording the
+ * speed into the wall as `wallImpact`), and sets its height and road grade. `CAR_SPEC` holds the
+ * tuning shared with the bot driver.
  */
 import { type Track, wrapAngle } from './track';
 import type { Controls } from './types';
@@ -26,11 +28,15 @@ export const CAR_SPEC = {
   steerGrip: 1.15,
   slipScrub: 6,
   draftBoost: 0.25,
+  damageSpeedLoss: 0.2,
+  damageGripLoss: 0.15,
   wheelbase: 2.6,
   maxSteer: 0.55,
   steerRate: 5,
   radius: 1.4,
 };
+
+export const MAX_HEALTH = 100;
 
 export type CarState = {
   x: number;
@@ -47,6 +53,8 @@ export type CarState = {
   draft: number;
   longAccel: number;
   latAccel: number;
+  health: number;
+  wallImpact: number;
 };
 
 export function createCar(track: Track, s: number, lateral: number): CarState {
@@ -65,6 +73,8 @@ export function createCar(track: Track, s: number, lateral: number): CarState {
     draft: 0,
     longAccel: 0,
     latAccel: 0,
+    health: MAX_HEALTH,
+    wallImpact: 0,
   };
 }
 
@@ -76,7 +86,8 @@ export function isFacingBackwards(car: CarState, track: Track): boolean {
 export function stepCar(car: CarState, controls: Controls, track: Track, dt: number): void {
   const spec = CAR_SPEC;
   const startSpeed = car.speed;
-  const topSpeed = (car.onRoad ? spec.maxSpeed : spec.grassMaxSpeed) * (1 + spec.draftBoost * car.draft);
+  const wear = 1 - car.health / MAX_HEALTH;
+  const topSpeed = (car.onRoad ? spec.maxSpeed : spec.grassMaxSpeed) * (1 + spec.draftBoost * car.draft) * (1 - spec.damageSpeedLoss * wear);
   const forward = Math.max(0, car.speed);
 
   let accel = controls.throttle * spec.engineAccel * Math.max(0, 1 - (forward / topSpeed) ** 2);
@@ -90,7 +101,7 @@ export function stepCar(car: CarState, controls: Controls, track: Track, dt: num
 
   car.steer += Math.max(-spec.steerRate * dt, Math.min(spec.steerRate * dt, controls.steer - car.steer));
   const speedAbs = Math.abs(car.speed);
-  const grip = spec.grip * (car.onRoad ? 1 : spec.grassGrip);
+  const grip = spec.grip * (car.onRoad ? 1 : spec.grassGrip) * (1 - spec.damageGripLoss * wear);
   const wheelYaw = (speedAbs * Math.tan(Math.abs(car.steer) * spec.maxSteer)) / spec.wheelbase;
   const gripYaw = (grip * spec.steerGrip * Math.abs(car.steer)) / Math.max(speedAbs, 1);
   const turnRate = Math.min(wheelYaw, gripYaw, grip / Math.max(speedAbs, 1));
@@ -110,12 +121,14 @@ function settleOnTrack(car: CarState, track: Track): void {
   const { s, lateral } = track.project(car.x, car.z, car.s);
   let sample = track.sampleAt(s);
   const trackYaw = Math.atan2(sample.tx, sample.tz);
+  car.wallImpact = 0;
   if (Math.abs(lateral) > track.wallOffset) {
     const push = lateral - Math.sign(lateral) * track.wallOffset;
     car.x += sample.tz * push;
     car.z -= sample.tx * push;
     let alignError = wrapAngle(trackYaw - car.yaw);
     if (Math.abs(alignError) > Math.PI / 2) alignError = wrapAngle(alignError + Math.PI);
+    car.wallImpact = Math.abs(car.speed * Math.sin(alignError));
     car.speed *= 1 - 0.5 * Math.abs(Math.sin(alignError)) - 0.002;
     car.yaw = wrapAngle(car.yaw + alignError * 0.2);
   }

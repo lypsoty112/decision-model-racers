@@ -4,7 +4,8 @@
  * `ChaseCamera.follow` trails the focused car low and close: its yaw lags the car's yaw so
  * turns show the kart's flank, and its position eases towards a point behind and above the car.
  * As speed rises the field of view widens, the camera drops back and down, and a shake grows
- * with speed and grass. `snap` jumps straight to the target, used when the focus changes.
+ * with speed and grass. `jolt` adds a burst of shake that dies away within a second, for crashes.
+ * `snap` jumps straight to the target, used when the focus changes.
  * `resize` keeps the aspect ratio in sync with the viewport.
  */
 import { PerspectiveCamera, Vector3 } from 'three';
@@ -22,6 +23,7 @@ export class ChaseCamera {
   private yaw = 0;
   private fov = BASE_FOV;
   private time = 0;
+  private impact = 0;
   private snapNext = true;
 
   resize(width: number, height: number): void {
@@ -31,6 +33,10 @@ export class ChaseCamera {
 
   snap(): void {
     this.snapNext = true;
+  }
+
+  jolt(amount: number): void {
+    this.impact = Math.max(this.impact, amount);
   }
 
   follow(car: CarState, dt: number): void {
@@ -46,7 +52,8 @@ export class ChaseCamera {
     this.position.lerp(this.desired, 1 - Math.exp(-dt * 12));
     this.snapNext = false;
 
-    const shake = speedRatio ** 3 * 0.05 + (car.onRoad ? 0 : speedRatio * 0.14);
+    this.impact *= Math.exp(-dt * 5);
+    const shake = speedRatio ** 3 * 0.05 + (car.onRoad ? 0 : speedRatio * 0.14) + this.impact;
     this.camera.position.set(
       this.position.x + Math.sin(this.time * 41) * shake,
       this.position.y + Math.sin(this.time * 53 + 1.7) * shake,

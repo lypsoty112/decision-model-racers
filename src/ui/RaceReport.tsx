@@ -5,7 +5,8 @@
  * style, decisions, rate, latency, errors, cost) for racers driven by an OpenRouter model and the
  * personality of each bot. It lays out highlight
  * cards chosen by `leaderOf`, two `LineChart`s (race position over time, and speed around the
- * lap), the metrics grid where each row comes from METRICS and the best value is marked, and the
+ * lap), the metrics grid where each row comes from METRICS (damage rows only when damage was on)
+ * and the best value is marked, and the
  * lap-times table. "Copy JSON" exports every summary; "Back to menu" closes it.
  */
 import { useMemo, useState } from 'react';
@@ -60,6 +61,8 @@ const METRICS: Metric[] = [
   { group: 'Racecraft', label: 'Time leading', value: (r) => r.leadingPct, format: pct, better: 'high' },
   { group: 'Racecraft', label: 'Car contacts', value: (r) => r.contacts, format: count, better: 'low' },
   { group: 'Racecraft', label: 'Respawns', value: (r) => r.respawns, format: count, better: 'low' },
+  { group: 'Damage', label: 'Damage taken', value: (r) => r.damageTaken, format: (v) => `${v.toFixed(0)} HP`, better: 'low' },
+  { group: 'Damage', label: 'Wrecks', value: (r) => r.wrecks, format: count, better: 'low' },
   { group: 'Decision model', label: 'Decisions', value: (r) => r.model?.decisions ?? null, format: count },
   { group: 'Decision model', label: 'Decisions per second', value: (r) => r.model?.decisionsPerSecond ?? null, format: (v) => v.toFixed(2), better: 'high' },
   { group: 'Decision model', label: 'Average latency', value: (r) => r.model?.averageLatencyMs ?? null, format: (v) => `${v.toFixed(0)} ms`, better: 'low' },
@@ -148,7 +151,7 @@ export function RaceReport({ race, onClose }: RaceReportProps) {
   const topSpeed = Math.max(1, ...rows.map((row) => row.topSpeedKmh));
   const traceLength = Math.max(1, ...rows.map((row) => row.positionTrace.length));
   const hasModels = rows.some((row) => row.model);
-  const metrics = METRICS.filter((metric) => hasModels || metric.group !== 'Decision model');
+  const metrics = METRICS.filter((metric) => (hasModels || metric.group !== 'Decision model') && (race.damage || metric.group !== 'Damage'));
   const groups = [...new Set(metrics.map((metric) => metric.group))];
 
   const highlights = [

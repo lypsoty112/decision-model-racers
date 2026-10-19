@@ -281,6 +281,33 @@ code {
   color: var(--ink-muted);
 }
 
+.health {
+  width: 120px;
+  height: 10px;
+  margin-top: 6px;
+  overflow: hidden;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  background: rgba(16, 24, 44, 0.6);
+}
+
+.health span {
+  display: block;
+  height: 100%;
+  background: var(--cool);
+  transition: width 0.2s;
+}
+
+.health span.critical {
+  background: var(--danger);
+  animation: blink 0.6s steps(2) infinite;
+}
+
+.standings-gap.wrecked {
+  color: var(--danger);
+  font-weight: 800;
+}
+
 .speedometer {
   width: 190px;
   overflow: visible;

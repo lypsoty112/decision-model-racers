@@ -792,6 +792,60 @@ code {
   font-size: 13px;
 }
 
+.menu-grid[hidden] {
+  display: none;
+}
+
+.menu-side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-height: 100%;
+}
+
+.scorecard-wrap {
+  overflow-x: auto;
+}
+
+.scorecard {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.scorecard th,
+.scorecard td {
+  padding: 5px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.scorecard th {
+  color: var(--ink-muted);
+  font-weight: 700;
+}
+
+.scorecard th:nth-child(2),
+.scorecard td.scorecard-name {
+  text-align: left;
+}
+
+.scorecard-name .swatch {
+  margin-right: 6px;
+}
+
+.scorecard-total {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.scorecard tr.focused td {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .field em {
   margin-right: auto;
   margin-left: 8px;
@@ -983,6 +1037,11 @@ code {
 
   .menu-results {
     width: min(600px, 100%);
+  }
+
+  .menu-side {
+    width: min(600px, 100%);
+    max-height: none;
   }
 
   .menu-grid {

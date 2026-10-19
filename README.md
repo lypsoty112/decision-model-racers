@@ -43,6 +43,12 @@ race ends, a full-screen report compares every racer: result, pace, driving, rac
 decision-model metrics, with position and speed charts, lap times, and a JSON export. The menu's
 "Full report" button reopens it.
 
+Set the mode to Tournament to race the same grid over 3–8 rounds: the first on the selected
+track, the rest on fresh random tracks of the same length and complexity. Every round awards F1
+points (25, 18, 15, 12, 10, 8, 6, 4, 2, 1 for the top ten, nothing for a DNF), and the
+scorecard beside the menu ranks racers by points, then wins, then best finish. The tournament is
+saved in the browser, so a reload picks up at the next round; Abandon ends it early.
+
 Every race starts from a random grid. Bots ride the slipstream of a car they are catching, then
 commit to the inside of the next corner to pass, braking later while they attack, and the car
 being passed gives them room. A bot stuck behind the same car for too long attacks anyway, and a

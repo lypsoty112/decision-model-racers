@@ -8,7 +8,10 @@
  * it, the demo restarts on that track PREVIEW_DELAY ms after the last change. `startRace` builds a
  * race from the settings and begins its countdown when `canStart` allows it, on the chase camera
  * when you race and on the TV camera when you spectate; `openMenu` pauses a running race behind
- * the menu and `resume` continues it. If the OpenRouter key turns invalid or runs out
+ * the menu and `resume` continues it. `App` also owns the stored tournament: while one is running
+ * the menu, the demo, and `startRace` use the next round's settings, `startRace` in tournament mode
+ * starts a new tournament (a single race drops a finished one), and `openMenu` records a finished
+ * race into the tournament when it is the round the tournament is waiting for. If the OpenRouter key turns invalid or runs out
  * of credits during a decision-model race, that race is stopped and replaced by the demo race.
  * Global keys: R respawns the player (`respawnPlayer`), V and Shift+V cycle the followed racer
  * (`cycleFocus`), C cycles the camera mode while spectating (`cycleCamera`), T toggles telemetry,
@@ -19,6 +22,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { installRacerApi } from './api/racerApi';
 import { canStart, createRace, DEFAULT_SETTINGS, demoSettings, PLAYER_ID, type RaceSettings, trackFor } from './game/setup';
+import { createTournament, isComplete, readTournament, recordRound, roundSettings, saveTournament } from './game/tournament';
 import { Keyboard } from './input/keyboard';
 import { getKeyStatus, keyUsable, ModelDriver, subscribeKeyStatus } from './models/modelDriver';
 import { type CameraMode, GameEngine } from './render/engine';
@@ -30,7 +34,7 @@ import { RaceReport } from './ui/RaceReport';
 import { Telemetry } from './ui/Telemetry';
 import { TouchControls } from './ui/TouchControls';
 
-type Session = { race: Race; demo: boolean };
+type Session = { race: Race; demo: boolean; round: number | null };
 
 const keyboard = new Keyboard();
 const CAMERA_MODES: CameraMode[] = ['chase', 'overhead', 'tv'];
@@ -39,7 +43,7 @@ const PREVIEW_DELAY = 500;
 function startDemo(settings: RaceSettings): Session {
   const race = createRace(demoSettings(settings), keyboard);
   race.start();
-  return { race, demo: true };
+  return { race, demo: true, round: null };
 }
 
 export default function App() {
@@ -49,8 +53,11 @@ export default function App() {
   const sessionRef = useRef(session);
   const [lastRace, setLastRace] = useState<Race | null>(null);
   const [settings, setSettings] = useState<RaceSettings>(DEFAULT_SETTINGS);
-  const settingsRef = useRef(settings);
-  const track = trackFor(settings);
+  const [tournament, setTournament] = useState(readTournament);
+  const running = tournament && !isComplete(tournament) ? tournament : null;
+  const menuSettings = running ? roundSettings(running) : settings;
+  const settingsRef = useRef(menuSettings);
+  const track = trackFor(menuSettings);
   const [screen, setScreen] = useState<'menu' | 'race'>('menu');
   const [paused, setPaused] = useState(false);
   const [focusId, setFocusId] = useState('');
@@ -74,10 +81,11 @@ export default function App() {
   }, [session]);
   useEffect(() => engineRef.current?.setFocus(focusId), [focusId]);
   useEffect(() => engineRef.current?.setCameraMode(cameraMode), [cameraMode]);
-  useEffect(() => engineRef.current?.setTimeOfDay(settings.timeOfDay), [settings.timeOfDay]);
+  useEffect(() => engineRef.current?.setTimeOfDay(menuSettings.timeOfDay), [menuSettings.timeOfDay]);
   useEffect(() => {
-    settingsRef.current = settings;
-  }, [settings]);
+    settingsRef.current = menuSettings;
+  }, [menuSettings]);
+  useEffect(() => saveTournament(tournament), [tournament]);
   useEffect(() => {
     const { race: current, demo } = sessionRef.current;
     if (current.track === track || (!demo && current.phase !== 'finished')) return;
@@ -102,13 +110,16 @@ export default function App() {
   );
 
   const startRace = () => {
-    if (!canStart(settings, getKeyStatus())) return;
-    const next = createRace(settings, keyboard);
+    const nextTournament = running ?? (settings.mode === 'tournament' ? createTournament(settings) : null);
+    const raceSettings = nextTournament ? roundSettings(nextTournament) : settings;
+    if (!canStart(raceSettings, getKeyStatus())) return;
+    const next = createRace(raceSettings, keyboard);
     next.start();
-    setSession({ race: next, demo: false });
+    setTournament(nextTournament);
+    setSession({ race: next, demo: false, round: nextTournament ? nextTournament.results.length : null });
     setLastRace(null);
-    setFocusId(settings.participate ? PLAYER_ID : '');
-    setCameraMode(settings.participate ? 'chase' : 'tv');
+    setFocusId(raceSettings.participate ? PLAYER_ID : '');
+    setCameraMode(raceSettings.participate ? 'chase' : 'tv');
     setPaused(false);
     setReportOpen(false);
     setScreen('race');
@@ -120,6 +131,7 @@ export default function App() {
     if (finished) {
       setFocusId('');
       if (!session.demo) setLastRace(race);
+      if (tournament && session.round === tournament.results.length) setTournament(recordRound(tournament, race));
     }
     setScreen('menu');
   };
@@ -188,13 +200,15 @@ export default function App() {
       )}
       {screen === 'menu' && (
         <Menu
-          settings={settings}
+          settings={menuSettings}
           keyStatus={keyStatus}
           onChange={setSettings}
           onStart={startRace}
           onResume={paused ? resume : null}
           onReport={() => setReportOpen(true)}
           results={lastRace?.standings() ?? null}
+          tournament={tournament}
+          onAbandon={() => setTournament(null)}
         />
       )}
       {screen === 'menu' && reportOpen && lastRace && <RaceReport race={lastRace} onClose={() => setReportOpen(false)} />}

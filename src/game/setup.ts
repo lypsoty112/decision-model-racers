@@ -1,7 +1,8 @@
 /*
  * Turns between-races menu settings into a ready-to-start `Race`.
  *
- * `RaceSettings` is everything the menu configures. `MEADOW_RING` is the hand-made circuit, built
+ * `RaceSettings` is everything the menu configures, including whether the start button begins a
+ * single race or a tournament of `rounds` races (`src/game/tournament.ts`). `MEADOW_RING` is the hand-made circuit, built
  * once; `trackFor` returns it or the random track the settings describe, generated once and kept
  * while the settings stay the same, so every caller gets the same `Track` object. The random
  * track's length and complexity stay within the TRACK_LENGTH and MAX_COMPLEXITY ranges, where the
@@ -32,6 +33,8 @@ export type Difficulty = 'rookie' | 'pro' | 'legend';
 export type ModelEntry = DecisionModelInfo & { style: DrivingStyle };
 
 export type RaceSettings = {
+  mode: 'single' | 'tournament';
+  rounds: number;
   laps: number;
   cpu: 'bots' | 'models';
   bots: number;
@@ -80,6 +83,8 @@ const DIFFICULTY: Record<Difficulty, { grip: [number, number]; pace: [number, nu
 };
 
 export const DEFAULT_SETTINGS: RaceSettings = {
+  mode: 'single',
+  rounds: 4,
   laps: 3,
   cpu: 'bots',
   bots: 7,

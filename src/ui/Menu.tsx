@@ -1,14 +1,17 @@
 /*
  * Between-races menu: race configuration, the stored track record, and the last race's results.
  *
- * `Menu` edits `RaceSettings`: the track (Meadow Ring, or a random track with a length,
+ * `Menu` edits `RaceSettings`: single race or tournament (with its round count), the track
+ * (Meadow Ring, or a random track with a length,
  * complexity, and a New track button for a fresh seed; the title shows the selected track's name,
  * length, corners, seed, and record), lap count, racing or spectating, the CPU type (bots with a
  * count and skill, or OpenRouter decision models), time of day, and, when racing, driver name and
  * kart colour. Decision-model races are capped at MODEL_MAX_LAPS laps. Each time the menu opens it
  * re-checks the OpenRouter key and blocks decision-model races while the key is invalid or out of
  * credits. It offers Resume while a race is paused behind it, and after a race it shows the final
- * standings with a button to reopen the full report, and it links the source on GitHub.
+ * standings with a button to reopen the full report, and it links the source on GitHub. While a
+ * tournament is running, `settings` are the next round's, the form is hidden, the start button
+ * starts that round, and the `Scorecard` sits beside the last race's standings.
  * `Segmented` renders a row of mutually exclusive choices as a radio group. `ModelPicker` loads
  * the decision-model catalogue and lets the player add up to MAX_MODELS entries, at most
  * MAX_COPIES of one model, each with its own driving style.
@@ -30,11 +33,13 @@ import {
   TRACK_LENGTH,
   trackFor,
 } from '../game/setup';
+import { isComplete, type Tournament, TOURNAMENT_ROUNDS } from '../game/tournament';
 import { DRIVING_STYLES, type DrivingStyle } from '../models/decisionState';
 import { type DecisionModelInfo, type KeyStatus, keyUsable, listDecisionModels, refreshKeyStatus } from '../models/modelDriver';
 import { TIME_PRESETS, type TimeOfDay } from '../render/environment';
 import type { Racer } from '../sim/race';
 import { formatTime, ordinal, readTrackRecord } from './format';
+import { Scorecard } from './Scorecard';
 
 type MenuProps = {
   settings: RaceSettings;
@@ -44,6 +49,8 @@ type MenuProps = {
   onResume: (() => void) | null;
   onReport: () => void;
   results: Racer[] | null;
+  tournament: Tournament | null;
+  onAbandon: () => void;
 };
 
 type SegmentedProps<T> = { label: string; value: T; options: [T, string][]; onSelect: (value: T) => void };
@@ -118,7 +125,7 @@ function ModelPicker({ selected, onChange }: ModelPickerProps) {
   );
 }
 
-export function Menu({ settings, keyStatus, onChange, onStart, onResume, onReport, results }: MenuProps) {
+export function Menu({ settings, keyStatus, onChange, onStart, onResume, onReport, results, tournament, onAbandon }: MenuProps) {
   useEffect(() => refreshKeyStatus(), []);
   const update = (patch: Partial<RaceSettings>) => {
     const next = { ...settings, ...patch };
@@ -128,6 +135,14 @@ export function Menu({ settings, keyStatus, onChange, onStart, onResume, onRepor
   const track = trackFor(settings);
   const record = readTrackRecord(track.id);
   const timeOptions = (Object.keys(TIME_PRESETS) as TimeOfDay[]).map((time): [TimeOfDay, string] => [time, TIME_PRESETS[time].label]);
+  const nextRound = tournament && !isComplete(tournament) ? tournament.results.length + 1 : null;
+  const startLabel = nextRound
+    ? `Start round ${nextRound}`
+    : settings.mode === 'tournament'
+      ? 'Start tournament'
+      : settings.participate
+        ? 'Start race'
+        : 'Start spectating';
 
   return (
     <div className="menu-backdrop">
@@ -148,7 +163,38 @@ export function Menu({ settings, keyStatus, onChange, onStart, onResume, onRepor
             onStart();
           }}
         >
-          <div className="menu-grid">
+          {nextRound && (
+            <p className="hint">
+              Round {nextRound} of {tournament?.tracks.length}. The grid and settings stay the same until the tournament ends or you abandon it.
+            </p>
+          )}
+          <div className="menu-grid" hidden={nextRound !== null}>
+            <div className={settings.mode === 'tournament' ? 'field' : 'field wide'}>
+              <span>Mode</span>
+              <Segmented
+                label="Mode"
+                value={settings.mode}
+                options={[
+                  ['single', 'Single race'],
+                  ['tournament', 'Tournament'],
+                ]}
+                onSelect={(mode) => update({ mode })}
+              />
+            </div>
+            {settings.mode === 'tournament' && (
+              <label className="field">
+                <span>
+                  Rounds <strong>{settings.rounds}</strong>
+                </span>
+                <input
+                  type="range"
+                  min={TOURNAMENT_ROUNDS.min}
+                  max={TOURNAMENT_ROUNDS.max}
+                  value={settings.rounds}
+                  onChange={(event) => update({ rounds: Number(event.target.value) })}
+                />
+              </label>
+            )}
             <div className="field wide">
               <span>Track</span>
               <div className="track-picker">
@@ -320,7 +366,7 @@ export function Menu({ settings, keyStatus, onChange, onStart, onResume, onRepor
               </button>
             )}
             <button type="submit" className="button primary" autoFocus disabled={!canStart(settings, keyStatus)}>
-              {settings.participate ? 'Start race' : 'Start spectating'}
+              {startLabel}
             </button>
           </div>
         </form>
@@ -334,26 +380,31 @@ export function Menu({ settings, keyStatus, onChange, onStart, onResume, onRepor
         </p>
       </div>
 
-      {results && (
-        <aside className="panel menu-results">
-          <header className="menu-results-header">
-            <h2>Last race</h2>
-            <button type="button" className="button secondary small" onClick={onReport}>
-              Full report
-            </button>
-          </header>
-          <ol>
-            {results.map((racer) => (
-              <li key={racer.id} className={racer.id === PLAYER_ID ? 'focused' : undefined}>
-                <span>{ordinal(racer.position)}</span>
-                <span className="swatch" style={{ background: racer.color }} />
-                <span className="standings-name">{racer.name}</span>
-                <span>{racer.finishTime === null ? 'DNF' : formatTime(racer.finishTime)}</span>
-                <span className="muted">best {formatTime(racer.bestLap)}</span>
-              </li>
-            ))}
-          </ol>
-        </aside>
+      {(tournament || results) && (
+        <div className="menu-side">
+          {tournament && <Scorecard tournament={tournament} onAbandon={onAbandon} />}
+          {results && (
+            <aside className="panel menu-results">
+              <header className="menu-results-header">
+                <h2>Last race</h2>
+                <button type="button" className="button secondary small" onClick={onReport}>
+                  Full report
+                </button>
+              </header>
+              <ol>
+                {results.map((racer) => (
+                  <li key={racer.id} className={racer.id === PLAYER_ID ? 'focused' : undefined}>
+                    <span>{ordinal(racer.position)}</span>
+                    <span className="swatch" style={{ background: racer.color }} />
+                    <span className="standings-name">{racer.name}</span>
+                    <span>{racer.finishTime === null ? 'DNF' : formatTime(racer.finishTime)}</span>
+                    <span className="muted">best {formatTime(racer.bestLap)}</span>
+                  </li>
+                ))}
+              </ol>
+            </aside>
+          )}
+        </div>
       )}
     </div>
   );

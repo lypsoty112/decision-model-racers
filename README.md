@@ -44,11 +44,15 @@ decision-model metrics, with position and speed charts, lap times, and a JSON ex
 "Full report" button reopens it.
 
 Every race starts from a random grid. Bots ride the slipstream of a car they are catching, then
-commit to the inside of the next corner to pass, and the car being passed gives them room. Each
-of the eleven bots has a personality, such as Blitz the late braker, Echo the slipstream shadow,
-or Sprocket the careful veteran, that slightly tunes its braking, the room it gives cars
-alongside, how fast it changes line, and how tightly it takes apexes (`src/game/setup.ts`).
-Press `T` to see a bot's personality.
+commit to the inside of the next corner to pass, braking later while they attack, and the car
+being passed gives them room. A bot stuck behind the same car for too long attacks anyway, and a
+bot with a car closing in behind may move over once to cover the inside. Each bot rolls a form
+for the race, its pace ebbs and flows over a slow cycle, and now and then it misjudges a corner
+and runs wide. Each of the eleven bots has a personality, such as Blitz the late braker, Turbo
+the hothead, or Sprocket the careful veteran, that sets its braking, the room it gives cars
+alongside, how fast it changes line, how tightly it takes apexes, and how consistent, aggressive,
+defensive, and composed it is (`src/game/setup.ts`). Press `T` to see a bot's personality.
+`bun run sim` prints overtakes, lead changes, and the finish spread for every race.
 
 ## Racing OpenRouter decision models
 

@@ -9,7 +9,8 @@
  * `trackFor` and fills the grid with the chosen CPU type: `BotDriver`s from
  * the BOTS roster, whose grip and pace rise evenly across the difficulty range from the first
  * bot to the last and are then nudged by each bot's personality along with its braking, room
- * given to cars alongside, line-change, and apex style (unset knobs take STYLE_DEFAULTS), or one
+ * given to cars alongside, line-change, apex style, consistency, aggression, defence, and composure
+ * (unset knobs take STYLE_DEFAULTS), or one
  * `ModelDriver` per `ModelEntry` (up to MAX_MODELS entries, at most MAX_COPIES of one model),
  * named "<model> · <style>" with a number added when the same model and style repeat. When
  * `participate` is set, it adds the keyboard racer, and `shuffle` then gives every racer a
@@ -58,19 +59,19 @@ export const newSeed = () => Math.floor(Math.random() * 1_000_000);
 
 let generated: Track | null = null;
 
-const STYLE_DEFAULTS = { grip: 1, pace: 1, brake: 0.7, berth: 1, lineShift: 7, apex: 1 };
+const STYLE_DEFAULTS = { grip: 1, pace: 1, brake: 0.7, berth: 1, lineShift: 7, apex: 1, consistency: 0.6, aggression: 0.4, defence: 0.4, composure: 0.7 };
 const BOTS: ({ name: string; color: string; personality: string } & Partial<typeof STYLE_DEFAULTS>)[] = [
-  { name: 'Nova', color: '#ef476f', personality: 'Smooth operator', lineShift: 5, brake: 0.66 },
-  { name: 'Blitz', color: '#ffd166', personality: 'Late braker', brake: 0.8 },
-  { name: 'Pixel', color: '#06d6a0', personality: 'Apex hunter', apex: 1.25 },
-  { name: 'Comet', color: '#118ab2', personality: 'Straight-line rocket', pace: 1.03, grip: 0.97 },
-  { name: 'Echo', color: '#f78c6b', personality: 'Slipstream shadow', berth: 0.6 },
-  { name: 'Turbo', color: '#9b5de5', personality: 'Hothead', lineShift: 10, berth: 0.7 },
-  { name: 'Zephyr', color: '#00bbf9', personality: 'Wide-line flier', apex: 0.75 },
-  { name: 'Quark', color: '#8ac926', personality: 'Corner carver', grip: 1.03, pace: 0.97 },
-  { name: 'Rally', color: '#ff924c', personality: 'Elbows out', berth: 0.75 },
-  { name: 'Sprocket', color: '#4cc9f0', personality: 'Careful veteran', brake: 0.62, berth: 1.4 },
-  { name: 'Vex', color: '#c77dff', personality: 'Perfectionist', grip: 1.02, brake: 0.74 },
+  { name: 'Nova', color: '#ef476f', personality: 'Smooth operator', lineShift: 5, brake: 0.66, consistency: 0.95, composure: 0.95, aggression: 0.2 },
+  { name: 'Blitz', color: '#ffd166', personality: 'Late braker', brake: 0.8, aggression: 0.8, composure: 0.45 },
+  { name: 'Pixel', color: '#06d6a0', personality: 'Apex hunter', apex: 1.25, consistency: 0.8 },
+  { name: 'Comet', color: '#118ab2', personality: 'Straight-line rocket', pace: 1.03, grip: 0.97, defence: 0.7 },
+  { name: 'Echo', color: '#f78c6b', personality: 'Slipstream shadow', berth: 0.6, aggression: 0.65 },
+  { name: 'Turbo', color: '#9b5de5', personality: 'Hothead', lineShift: 10, berth: 0.7, aggression: 0.95, composure: 0.3, consistency: 0.3 },
+  { name: 'Zephyr', color: '#00bbf9', personality: 'Wide-line flier', apex: 0.75, consistency: 0.4 },
+  { name: 'Quark', color: '#8ac926', personality: 'Corner carver', grip: 1.03, pace: 0.97, composure: 0.6 },
+  { name: 'Rally', color: '#ff924c', personality: 'Elbows out', berth: 0.75, defence: 0.9, aggression: 0.7 },
+  { name: 'Sprocket', color: '#4cc9f0', personality: 'Careful veteran', brake: 0.62, berth: 1.4, aggression: 0.1, composure: 0.95, defence: 0.6 },
+  { name: 'Vex', color: '#c77dff', personality: 'Perfectionist', grip: 1.02, brake: 0.74, consistency: 0.95, composure: 0.9 },
 ];
 const DIFFICULTY: Record<Difficulty, { grip: [number, number]; pace: [number, number] }> = {
   rookie: { grip: [0.6, 0.72], pace: [0.78, 0.85] },
@@ -132,7 +133,7 @@ export function createRace(settings: RaceSettings, keyboard: Keyboard): Race {
         id: `bot-${i + 1}`,
         name,
         color,
-        driver: new BotDriver({ ...style, grip: lerp(range.grip, t) * grip, pace: lerp(range.pace, t) * pace, lane: ((i % 3) - 1) * 2 }, personality),
+        driver: new BotDriver({ ...style, grip: lerp(range.grip, t) * grip, pace: lerp(range.pace, t) * pace, lane: ((i % 3) - 1) * 2 }, personality, Math.random),
       };
     });
   const models = (): RacerSetup[] =>

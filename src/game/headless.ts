@@ -27,6 +27,14 @@ function runRace(race: Race): void {
   while (race.phase !== 'finished' && race.time < TIME_LIMIT) race.step();
 }
 
+function excitement(race: Race): string {
+  const overtakes = race.racers.reduce((sum, racer) => sum + racer.stats.overtakes, 0);
+  const leaders = race.racers[0].stats.positionTrace.map((_, t) => race.racers.find((racer) => racer.stats.positionTrace[t] === 1)?.id);
+  const leadChanges = leaders.filter((leader, t) => t > 0 && leader !== undefined && leader !== leaders[t - 1]).length;
+  const finishes = race.racers.map((racer) => racer.finishTime ?? race.time);
+  return `${overtakes} overtakes, ${leadChanges} lead changes, finish spread ${(Math.max(...finishes) - Math.min(...finishes)).toFixed(2)} s`;
+}
+
 const base: RaceSettings = { ...DEFAULT_SETTINGS, participate: false, bots: 8 };
 const races: [string, RaceSettings][] = [
   ...(['rookie', 'pro', 'legend'] as Difficulty[]).map((difficulty): [string, RaceSettings] => [difficulty, { ...base, difficulty }]),
@@ -42,7 +50,7 @@ for (const [label, settings] of races) {
   runRace(race);
   console.log(
     `\n${label}, ${track.name} (${track.id}): ${track.length.toFixed(0)} m, ${track.corners.length} corners, tightest radius ${tightest.toFixed(1)} m; ` +
-      `simulated ${race.time.toFixed(1)} s in ${(performance.now() - started).toFixed(0)} ms`,
+      `simulated ${race.time.toFixed(1)} s in ${(performance.now() - started).toFixed(0)} ms; ${excitement(race)}`,
   );
   console.table(
     race.standings().map((racer) => ({

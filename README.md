@@ -74,15 +74,24 @@ Put `OPENROUTER_API_KEY=...` in `.env` (gitignored), then set CPU to "Decision m
 menu and add up to five of the models OpenRouter lists with the `decisions` output modality,
 such as `typesafe/jev-1.13`. You can add the same model up to three times, and give each entry a
 driving style: safe, balanced, or aggressive. The style and its meaning go into the model's
-state, and the style also scales the safe speed the state suggests for the curves ahead.
+state, and the style also scales the safe speed the state compares your speed against.
 Decision-model races are one lap. If OpenRouter reports the key as
 invalid or out of credits, the race stops and the menu blocks decision-model races until the key
 works again. Each model races in real time: the dev server forwards its state to
-OpenRouter's System One API (`server/decisionApi.ts`), so the key never reaches the browser. The
-model answers a steering score and a pedal choice that map onto the same controls you use
-(`src/models/decisionState.ts`). Press `T` to see a model's decisions, latency, cost, and
-errors. Models that only accept yes/no questions, such as the Respan family, report an error
-instead of driving.
+OpenRouter's System One API (`server/decisionApi.ts`), so the key never reaches the browser.
+
+An answer takes about 300 ms, so every model sends a new request every 150 ms with up to two in
+flight, and an answer that arrives after a newer one is dropped. Each state describes where the
+kart will be when the answer lands, predicted from its current controls over the model's average
+latency, as short sentences of named categories rather than raw numbers: where the road goes
+relative to the kart's nose in half a second and one second, position and facing on the road,
+speed against the safe speed for the bends ahead, the current or next corner, race position, the
+kart's health, nearby cars with their health, the driving style, and the last two decisions. The
+model answers a steering choice (seven levels from hard left to hard right) and a pedal choice
+that map onto the same controls you use (`src/models/decisionState.ts`). In headless tests this
+took solo Meadow Ring laps from about 67 s to 46–49 s (bots lap it in about 40 s). Press `T` to
+see a model's decisions, latency, cost, and errors. Models that only accept chat messages, such as
+the Respan span-01 family, report an error instead of driving.
 
 ## Decision-model interface
 

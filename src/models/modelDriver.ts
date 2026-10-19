@@ -3,12 +3,15 @@
  * health of the OpenRouter key.
  *
  * `ModelDriver.decide` runs every simulation step like any driver. It returns the controls from
- * the model's latest answer and, when no request is in flight, the key is usable, and at least
- * MIN_INTERVAL seconds of race time have passed, starts `ask`, a `POST /api/decide` with the
- * current state, so the race keeps running while the model thinks. Once the racer finishes it
- * stops asking and coasts. Every request carries the driver's `DrivingStyle`. `stats` holds
- * decisions, errors, latency (last, total, worst), and cost for the telemetry panel and the
- * race report.
+ * the model's latest answer and, when fewer than MAX_IN_FLIGHT requests are out, the key is usable,
+ * and REQUEST_INTERVAL seconds of race time have passed since the last request, starts `ask`, a
+ * `POST /api/decide`, so the race keeps running while the model thinks and overlapping requests
+ * bring answers in more often than one round trip allows. `ask` describes the state predicted
+ * `lookahead` seconds ahead (the model's average latency so far, DEFAULT_LATENCY before the first
+ * answer), when its answer should land, and an answer that arrives after a newer one is counted but
+ * not applied. Once the racer finishes it stops asking and coasts. Every request carries the
+ * driver's `DrivingStyle`. `stats` holds decisions, errors, latency (last, total, worst), and cost
+ * for the telemetry panel and the race report.
  *
  * The key status is a tiny store: `getKeyStatus` and `subscribeKeyStatus` back React's
  * `useSyncExternalStore`, `refreshKeyStatus` asks `GET /api/key-status`, and any decision that
@@ -17,12 +20,15 @@
  */
 import type { DecisionsResponse } from '@openrouter/sdk/models';
 import type { Controls, Driver, RacerObservation } from '../sim/types';
-import { DECISION_QUESTIONS, type DecisionAction, describeState, type DrivingStyle, toControls } from './decisionState';
+import { type Decision, DECISION_QUESTIONS, describeState, type DrivingStyle, predict, toControls } from './decisionState';
 
 export type DecisionModelInfo = { id: string; name: string; promptPrice: number };
 export type KeyStatus = { state: 'checking' | 'ok' | 'invalid' | 'no-credits'; message: string; remaining: number | null };
 
-const MIN_INTERVAL = 0.2;
+const REQUEST_INTERVAL = 0.15;
+const MAX_IN_FLIGHT = 2;
+const DEFAULT_LATENCY = 0.3;
+const MAX_LOOKAHEAD = 1;
 const COAST: Controls = { throttle: 0, brake: 0, steer: 0 };
 const KEY_FAILURES: Record<number, KeyStatus['state']> = { 401: 'invalid', 402: 'no-credits' };
 
@@ -79,10 +85,12 @@ export class ModelDriver implements Driver {
   readonly model: string;
   readonly style: DrivingStyle;
   readonly stats = { decisions: 0, errors: 0, latencyMs: 0, totalLatencyMs: 0, maxLatencyMs: 0, cost: 0, lastError: '' };
-  private readonly history: DecisionAction[] = [];
+  private readonly history: Decision[] = [];
   private controls = COAST;
-  private inFlight = false;
+  private inFlight = 0;
   private lastAsked = -Infinity;
+  private asked = 0;
+  private applied = -1;
 
   constructor(model: string, style: DrivingStyle) {
     this.model = model;
@@ -91,21 +99,28 @@ export class ModelDriver implements Driver {
 
   decide(observation: RacerObservation): Controls {
     if (observation.finished || !keyUsable(keyStatus)) return COAST;
-    if (observation.phase === 'racing' && !this.inFlight && observation.raceTime - this.lastAsked >= MIN_INTERVAL) this.ask(observation);
+    if (observation.phase === 'racing' && this.inFlight < MAX_IN_FLIGHT && observation.raceTime - this.lastAsked >= REQUEST_INTERVAL) this.ask(observation);
     return this.controls;
   }
 
   private ask(observation: RacerObservation): void {
-    this.inFlight = true;
+    const sequence = this.asked++;
+    this.inFlight++;
     this.lastAsked = observation.raceTime;
     const started = performance.now();
-    const body = JSON.stringify({ model: this.model, state: describeState(observation, this.history, this.style), questions: DECISION_QUESTIONS });
+    const answered = this.stats.decisions + this.stats.errors;
+    const lookahead = answered > 0 ? Math.min(MAX_LOOKAHEAD, this.stats.totalLatencyMs / answered / 1000) : DEFAULT_LATENCY;
+    const state = describeState(predict(observation, this.controls, lookahead), this.history, this.style);
+    const body = JSON.stringify({ model: this.model, state, questions: DECISION_QUESTIONS });
     fetchJson<DecisionsResponse>('/api/decide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
       .then((result) => {
-        this.controls = toControls(result.answers);
-        this.history.push({ ...this.controls, raceTime: observation.raceTime, speed: observation.speed });
         this.stats.decisions++;
         this.stats.cost += result.usage.cost ?? 0;
+        if (sequence < this.applied) return;
+        const { controls, decision } = toControls(result.answers);
+        this.applied = sequence;
+        this.controls = controls;
+        this.history.push(decision);
       })
       .catch((error: unknown) => {
         this.stats.errors++;
@@ -118,7 +133,7 @@ export class ModelDriver implements Driver {
         this.stats.latencyMs = latency;
         this.stats.totalLatencyMs += latency;
         this.stats.maxLatencyMs = Math.max(this.stats.maxLatencyMs, latency);
-        this.inFlight = false;
+        this.inFlight--;
       });
   }
 }

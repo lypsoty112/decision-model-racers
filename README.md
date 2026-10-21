@@ -49,13 +49,19 @@ points (25, 18, 15, 12, 10, 8, 6, 4, 2, 1 for the top ten, nothing for a DNF), a
 scorecard beside the menu ranks racers by points, then wins, then best finish. The tournament is
 saved in the browser, so a reload picks up at the next round; Abandon ends it early.
 
-Turn Damage on to give every kart 100 HP. Hitting a wall faster than 4 m/s, or another kart at a
-closing speed above 4 m/s, costs health, and a damaged kart loses up to a fifth of its top speed
-and some grip. The kart shows it: the paint scorches, the spoiler bends below 70 HP, the spoiler
-and front wing fly off below 45 HP and it trails smoke, and below 20 HP it burns. At 0 HP it
-explodes, sits as a charred wreck for 3 s, and respawns with full health. The HUD shows the
-followed kart's health, the standings mark wrecked karts, and the report adds damage taken and
-wrecks. Decision models see `health` for themselves and every opponent.
+Turn Damage on to give every kart 100 HP and to turn on crashes. Hitting a wall faster than 4 m/s,
+or another kart at a closing speed above 3 m/s (at most 12 HP per contact), costs health, and a
+damaged kart loses up to a fifth of its top speed and some grip; health never wrecks it. The kart
+shows it: the paint scorches, the spoiler bends below 70 HP, the spoiler and front wing fly off
+below 45 HP and it trails smoke, and below 20 HP it burns. A kart crashes when it is hit hard by
+another kart, hits a wall faster than 12 m/s, or corners on the grass faster than 43 m/s. A crashed
+kart becomes a tumbling rigid body: it rolls, flips, and flies according to where it was hit,
+grass grips it hard enough to roll it, it bounces off the road and the hedges (or clears them),
+and it can crash into other karts and take them down too. Once it has rested for a second, or
+after 6 s, it respawns on the racing line with the health it had. Over 96 bot races of 8 karts
+there are about 1.8 crashes per race, and the median kart loses about 20 HP. The HUD shows the
+followed kart's health, the standings mark crashed karts, and the report adds damage taken and
+crashes. Decision models see `health` for themselves and every opponent.
 
 Every race starts from a random grid. Bots ride the slipstream of a car they are catching, then
 commit to the inside of the next corner to pass, braking later while they attack, and the car

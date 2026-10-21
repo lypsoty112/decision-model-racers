@@ -8,21 +8,24 @@
  * `nameTag`. `setDisplayScale` enlarges the kart and, separately, its name tag so both stay legible
  * from the overhead camera. `update` places the kart
  * on the track, eases the body towards poses derived from lateral and longitudinal acceleration,
- * slip, and road grade, and adds a speed-dependent shimmer that grows on grass. When the car's
- * health changes, `showDamage` darkens the paint towards CHAR as health falls, bends the spoiler
- * below DAMAGE_STAGES.bent, drops the spoiler and front wing below DAMAGE_STAGES.shed, and chars
- * the whole kart at zero, where `update` also lets the body sag. `dispose` frees the kart's
- * geometries and materials.
+ * slip, and road grade, and adds a speed-dependent shimmer that grows on grass. While the car is
+ * crashed, `placeCrashed` takes the position and orientation of its tumbling body instead and
+ * keeps the name tag upright above it. When the car's health changes, `showDamage` darkens the
+ * paint towards CHAR as health falls, bends the spoiler below DAMAGE_STAGES.bent, and drops the
+ * spoiler and front wing below DAMAGE_STAGES.shed. `dispose` frees the kart's geometries and
+ * materials.
  */
-import { BoxGeometry, Color, CylinderGeometry, Group, type Material, Mesh, type MeshToonMaterial, SphereGeometry, Sprite, SpriteMaterial, type BufferGeometry } from 'three';
+import { BoxGeometry, Color, CylinderGeometry, Group, type Material, Mesh, type MeshToonMaterial, Quaternion, SphereGeometry, Sprite, SpriteMaterial, type BufferGeometry } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CAR_SPEC, type CarState, MAX_HEALTH } from '../sim/car';
+import { CENTRE_HEIGHT, type CrashBody } from '../sim/crash';
 import { toonMaterial } from './toon';
 import { canvasTexture } from './trackMesh';
 
 const OUTLINE = 0.0035;
 const LABEL_WIDTH = 3.2;
 const LABEL_HEIGHT = 0.8;
+const LABEL_Y = 2.7;
 const CHAR = new Color('#26221f');
 
 export const DAMAGE_STAGES = { bent: 70, shed: 45, burning: 20 };
@@ -122,7 +125,6 @@ export class CarModel {
     }
 
     this.label = new Sprite(nameTag(name, color));
-    this.label.position.y = 2.7;
     this.root.add(this.label);
     this.setDisplayScale(1, 1);
   }
@@ -133,12 +135,16 @@ export class CarModel {
   }
 
   update(car: CarState, dt: number): void {
-    this.root.position.set(car.x, car.y, car.z);
-    this.root.rotation.set(-Math.atan(car.grade), car.yaw, 0, 'YXZ');
+    if (car.crash) {
+      this.placeCrashed(car.crash);
+    } else {
+      this.root.position.set(car.x, car.y, car.z);
+      this.root.rotation.set(-Math.atan(car.grade), car.yaw, 0, 'YXZ');
+      this.label.position.set(0, LABEL_Y, 0);
+    }
     if (car.health !== this.shownHealth) this.showDamage(car.health);
     const ease = 1 - Math.exp(-dt * 8);
-    const sag = car.health <= 0 ? 0.2 : 0;
-    this.roll += (clamp(-car.latAccel * 0.01, -0.14, 0.14) + sag - this.roll) * ease;
+    this.roll += (clamp(-car.latAccel * 0.01, -0.14, 0.14) - this.roll) * ease;
     this.pitch += (clamp(-car.longAccel * 0.006, -0.08, 0.1) - this.pitch) * ease;
     this.kick += (-Math.sign(car.latAccel) * car.slip * 0.35 - this.kick) * ease;
     this.chassis.rotation.set(this.pitch, this.kick, this.roll, 'YXZ');
@@ -152,9 +158,16 @@ export class CarModel {
     this.chassis.position.y = Math.sin(this.shimmer) * speedRatio * (car.onRoad ? 0.012 : 0.06);
   }
 
+  private placeCrashed(body: CrashBody): void {
+    this.root.quaternion.copy(body.orientation);
+    this.root.position.set(0, -CENTRE_HEIGHT * this.root.scale.y, 0).applyQuaternion(body.orientation).add(body.position);
+    this.label.position.set(0, LABEL_Y - CENTRE_HEIGHT, 0).applyQuaternion(new Quaternion().copy(body.orientation).invert());
+    this.label.position.y += CENTRE_HEIGHT;
+  }
+
   private showDamage(health: number): void {
     this.shownHealth = health;
-    const scorch = health > 0 ? (1 - health / MAX_HEALTH) * 0.5 : 0.85;
+    const scorch = (1 - health / MAX_HEALTH) * 0.5;
     for (const { material, base } of this.paint) material.color.copy(base).lerp(CHAR, scorch);
     const bend = health < DAMAGE_STAGES.bent ? 1 : 0;
     this.spoiler.rotation.set(0.35 * bend, 0, 0.3 * bend);

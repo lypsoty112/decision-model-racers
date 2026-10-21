@@ -11,8 +11,10 @@
  * lowers top speed and grip by up to `damageSpeedLoss` and `damageGripLoss`. `settleOnTrack` then
  * re-projects the car, holds it inside the walls (bleeding speed by impact angle and recording the
  * speed into the wall as `wallImpact`), and sets its height and road grade. `CAR_SPEC` holds the
- * tuning shared with the bot driver.
+ * tuning shared with the bot driver. While the car is crashed, `crash` holds the rigid body from
+ * `crash.ts` that moves it instead of `stepCar`.
  */
+import type { CrashBody } from './crash';
 import { type Track, wrapAngle } from './track';
 import type { Controls } from './types';
 
@@ -55,6 +57,7 @@ export type CarState = {
   latAccel: number;
   health: number;
   wallImpact: number;
+  crash: CrashBody | null;
 };
 
 export function createCar(track: Track, s: number, lateral: number): CarState {
@@ -75,6 +78,7 @@ export function createCar(track: Track, s: number, lateral: number): CarState {
     latAccel: 0,
     health: MAX_HEALTH,
     wallImpact: 0,
+    crash: null,
   };
 }
 

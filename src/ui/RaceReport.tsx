@@ -62,7 +62,7 @@ const METRICS: Metric[] = [
   { group: 'Racecraft', label: 'Car contacts', value: (r) => r.contacts, format: count, better: 'low' },
   { group: 'Racecraft', label: 'Respawns', value: (r) => r.respawns, format: count, better: 'low' },
   { group: 'Damage', label: 'Damage taken', value: (r) => r.damageTaken, format: (v) => `${v.toFixed(0)} HP`, better: 'low' },
-  { group: 'Damage', label: 'Wrecks', value: (r) => r.wrecks, format: count, better: 'low' },
+  { group: 'Damage', label: 'Crashes', value: (r) => r.crashes, format: count, better: 'low' },
   { group: 'Decision model', label: 'Decisions', value: (r) => r.model?.decisions ?? null, format: count },
   { group: 'Decision model', label: 'Decisions per second', value: (r) => r.model?.decisionsPerSecond ?? null, format: (v) => v.toFixed(2), better: 'high' },
   { group: 'Decision model', label: 'Average latency', value: (r) => r.model?.averageLatencyMs ?? null, format: (v) => `${v.toFixed(0)} ms`, better: 'low' },

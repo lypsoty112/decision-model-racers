@@ -303,7 +303,7 @@ code {
   animation: blink 0.6s steps(2) infinite;
 }
 
-.standings-gap.wrecked {
+.standings-gap.crashed {
   color: var(--danger);
   font-weight: 800;
 }

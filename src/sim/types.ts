@@ -11,7 +11,7 @@
  * right of the track direction. An opponent's `gap` is race distance (laps included) and positive
  * when they are ahead; their `lateralOffset` is their own offset from the centreline.
  * `slipstream` runs from 0 (clean air) to 1 (tucked right behind another car). `health` runs from
- * 100 down to 0, where the car is wrecked; it only drops in races with damage on. Corners are
+ * 100 down to 0, where the car is slowest; it only drops in races with damage on. Corners are
  * numbered from 1 in racing order after the start line, and a corner's `distance` is negative
  * while the racer is inside it. `curvatureAhead[i]` is the curvature
  * `i * curvatureStep` metres ahead.

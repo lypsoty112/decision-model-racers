@@ -152,7 +152,7 @@ function facingOf(o: RacerObservation): string {
   return Math.abs(angle) < 12 ? `facing slightly ${side} of the road` : `facing well ${side} of the road`;
 }
 
-const healthOf = (health: number) => (health >= 70 ? 'healthy' : health >= 45 ? 'damaged' : health >= 20 ? 'badly damaged' : 'about to wreck');
+const healthOf = (health: number) => (health >= 70 ? 'healthy' : health >= 45 ? 'damaged' : health >= 20 ? 'badly damaged' : 'barely holding together');
 
 function cornerOf(o: RacerObservation): string {
   const sharpness = (radius: number) => (radius < 35 ? 'sharp' : radius < 70 ? 'medium' : 'gentle');

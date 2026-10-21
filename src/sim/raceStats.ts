@@ -6,7 +6,7 @@
  * the road, at the walls, facing backwards, sliding, in slipstream, and leading; pedal and
  * steering use; distance; and peak speed and cornering load. It counts wall hits, brake
  * applications, overtakes, and places lost on their rising edge, and samples the race position
- * once per second. Car-to-car contacts, damage taken, wrecks, respawns, and lap times are counted
+ * once per second. Car-to-car contacts, damage taken, crashes, respawns, and lap times are counted
  * by the race itself.
  * `summarize` turns a racer's record into the display-ready `RacerSummary` (speeds in km/h,
  * shares in percent) used by the report and its JSON export.
@@ -38,7 +38,7 @@ export type RacerStats = {
   placesLost: number;
   contacts: number;
   damageTaken: number;
-  wrecks: number;
+  crashes: number;
   bestPosition: number;
   worstPosition: number;
   positionTrace: number[];
@@ -72,7 +72,7 @@ export function createStats(startPosition: number): RacerStats {
     placesLost: 0,
     contacts: 0,
     damageTaken: 0,
-    wrecks: 0,
+    crashes: 0,
     bestPosition: startPosition,
     worstPosition: startPosition,
     positionTrace: [startPosition],
@@ -157,7 +157,7 @@ export function summarize(racer: Racer, race: Race) {
     worstPosition: stats.worstPosition,
     contacts: stats.contacts,
     damageTaken: stats.damageTaken,
-    wrecks: stats.wrecks,
+    crashes: stats.crashes,
     respawns: racer.respawns,
     positionTrace: stats.positionTrace,
     speedProfileKmh: Array.from(racer.speedProfile, (speed) => speed * 3.6),

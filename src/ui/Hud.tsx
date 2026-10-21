@@ -1,8 +1,8 @@
 /*
  * The in-race heads-up display, refreshed 20 times a second from the mutable race.
  *
- * `Hud` lays out the standings tower (wrecked racers marked), the lap and timing panel, the
- * countdown, warnings (wrecked, wrong way, off track, slipstream), the big position read-out with
+ * `Hud` lays out the standings tower (crashed racers marked), the lap and timing panel, the
+ * countdown, warnings (crashed, wrong way, off track, slipstream), the big position read-out with
  * a health bar when damage is on, the `Speedometer` arc gauge, a
  * spectating banner naming the camera mode and the racer it follows, and the full-screen
  * `RaceReport` once the race is over. `gapText` estimates each racer's gap to the leader from the leader's
@@ -80,7 +80,7 @@ export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
             <span className="standings-position">{racer.position}</span>
             <span className="swatch" style={{ background: racer.color }} />
             <span className="standings-name">{racer.name}</span>
-            <span className={racer.wreckTime > 0 ? 'standings-gap wrecked' : 'standings-gap'}>{racer.wreckTime > 0 ? 'Wrecked' : gapText(race, racer, leader)}</span>
+            <span className={racer.car.crash ? 'standings-gap crashed' : 'standings-gap'}>{racer.car.crash ? 'Crashed' : gapText(race, racer, leader)}</span>
           </li>
         ))}
       </ol>
@@ -109,7 +109,7 @@ export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
       {race.phase === 'racing' && race.time < 1 && <div className="countdown go">GO!</div>}
 
       <div className="warnings">
-        {focused.wreckTime > 0 && <span className="warning danger">Wrecked</span>}
+        {focused.car.crash && <span className="warning danger">Crashed</span>}
         {observation.wrongWay && observation.speed > 2 && <span className="warning danger">Wrong way</span>}
         {observation.offTrack && !observation.finished && <span className="warning">Off track</span>}
         {observation.slipstream > 0.25 && observation.speed > 10 && <span className="warning boost">Slipstream</span>}

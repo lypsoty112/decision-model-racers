@@ -6,7 +6,7 @@
  * The script runs one Meadow Ring race per difficulty, one pro race on each of the RANDOM_TRACKS,
  * and one pro Meadow Ring race with damage on, prints track facts and a results table for each,
  * and throws (non-zero exit) when any bot fails to finish or needed more than two respawns that
- * were not wrecks.
+ * were not crashes.
  */
 import { Keyboard } from '../input/keyboard';
 import type { Race } from '../sim/race';
@@ -61,13 +61,14 @@ for (const [label, settings] of races) {
       finish: racer.finishTime?.toFixed(2) ?? 'DNF',
       bestLap: racer.bestLap?.toFixed(2) ?? '-',
       respawns: racer.respawns,
-      wrecks: racer.stats.wrecks,
+      crashes: racer.stats.crashes,
+      damage: racer.stats.damageTaken.toFixed(0),
       progress: racer.progress.toFixed(0),
     })),
   );
   for (const racer of race.racers) {
     if (racer.finishTime === null) failures.push(`${label} ${track.name}/${racer.name} did not finish`);
-    if (racer.respawns - racer.stats.wrecks > 2) failures.push(`${label} ${track.name}/${racer.name} respawned ${racer.respawns} times`);
+    if (racer.respawns - racer.stats.crashes > 2) failures.push(`${label} ${track.name}/${racer.name} respawned ${racer.respawns} times`);
   }
 }
 

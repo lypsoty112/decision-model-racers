@@ -6,8 +6,9 @@
  * and TV cameras) and `setRace` rebuilds it, freeing the old meshes, when the new race runs on a
  * different track. Each animation frame advances the race unless
  * `paused`, poses every `CarModel`, kicks up dust and tyre smoke in `emitTrail`, trails soot and
- * flames from damaged karts in `emitDamage`, sets off `Explosions` when `reactToDamage` sees a kart
- * shed its wings or wreck (jolting the chase camera when it is the followed kart), and films the
+ * flames from damaged karts in `emitDamage`, throws `Debris` when `reactToDamage` sees a kart shed
+ * its wings or `reactToCrash` sees a kart crash or its tumbling body slam into something (jolting
+ * the chase camera when it is the followed kart), and films the
  * race with the camera chosen by `setCameraMode`: the chase camera behind the focused racer
  * (`setFocus`; the leader when the id is unknown), the whole-track overhead view (karts and
  * name tags enlarged by `applyDisplayScale`, fog pushed back by the camera's distance), or the
@@ -19,12 +20,13 @@
 import { Color, Group, Mesh, type MeshToonMaterial, PCFShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
 import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
 import { CAR_SPEC, type CarState, MAX_HEALTH } from '../sim/car';
+import { liftOf } from '../sim/crash';
 import type { Race, Racer } from '../sim/race';
 import type { Track } from '../sim/track';
 import { CarModel, DAMAGE_STAGES } from './carModel';
 import { ChaseCamera } from './chaseCamera';
+import { Debris } from './debris';
 import { Environment, type TimeOfDay } from './environment';
-import { Explosions } from './explosion';
 import { buildLandscape } from './landscape';
 import { OverheadCamera, TvCamera } from './spectatorCameras';
 import { Particles, SpeedLines } from './speedEffects';
@@ -36,6 +38,7 @@ const SOOT = new Color('#4a4650');
 const FLAME = new Color('#ff8c42');
 const OVERHEAD_KART_SCALE = 4;
 const OVERHEAD_LABEL_SCALE = 14;
+const CRASH_START_STRENGTH = 10;
 
 export type CameraMode = 'chase' | 'overhead' | 'tv';
 
@@ -55,9 +58,10 @@ export class GameEngine {
   private readonly environment: Environment;
   private readonly speedLines = new SpeedLines();
   private readonly particles = new Particles(1500);
-  private readonly explosions = new Explosions(this.particles);
+  private readonly debris = new Debris(this.particles);
   private readonly models = new Map<string, CarModel>();
   private readonly health = new Map<string, number>();
+  private readonly crashHits = new Map<string, number>();
   private readonly resizeObserver: ResizeObserver;
   private race: Race;
   private focusId = '';
@@ -73,7 +77,7 @@ export class GameEngine {
     this.outline = new OutlineEffect(this.renderer, { defaultThickness: 0.003, defaultColor: [0.09, 0.1, 0.16] });
     this.outline.autoClear = true;
     this.environment = new Environment(this.scene);
-    this.scene.add(this.world, this.particles.points, this.explosions.group);
+    this.scene.add(this.world, this.particles.points, this.debris.group);
     this.buildWorld(race.track);
     this.race = race;
     this.setRace(race);
@@ -94,6 +98,7 @@ export class GameEngine {
     }
     this.models.clear();
     this.health.clear();
+    this.crashHits.clear();
     for (const racer of race.racers) {
       const model = new CarModel(racer.color, racer.name);
       this.applyDisplayScale(model);
@@ -163,12 +168,13 @@ export class GameEngine {
     for (const racer of this.race.racers) {
       this.models.get(racer.id)?.update(racer.car, dt);
       this.reactToDamage(racer);
+      this.reactToCrash(racer);
       if (!this.paused) {
         this.emitTrail(racer.car, dt);
         this.emitDamage(racer.car, dt);
       }
     }
-    this.explosions.update(this.paused ? 0 : dt);
+    this.debris.update(this.paused ? 0 : dt);
     if (this.cameraMode === 'tv') {
       const subjectId = this.tv.update(this.race, dt);
       if (subjectId !== this.focusId) {
@@ -191,23 +197,27 @@ export class GameEngine {
   private reactToDamage({ id, car, color }: Racer): void {
     const previous = this.health.get(id) ?? MAX_HEALTH;
     this.health.set(id, car.health);
-    if (previous > 0 && car.health <= 0) {
-      this.explosions.burst(car, new Color(color));
-      if (id === this.focusId) this.chase.jolt(0.5);
-    } else if (previous >= DAMAGE_STAGES.shed && car.health < DAMAGE_STAGES.shed) {
-      this.explosions.shed(car, new Color(color));
+    if (previous >= DAMAGE_STAGES.shed && car.health < DAMAGE_STAGES.shed) this.debris.shed(car, new Color(color));
+  }
+
+  private reactToCrash({ id, car, color }: Racer): void {
+    const hits = car.crash ? car.crash.hits : -1;
+    if (car.crash && hits > (this.crashHits.get(id) ?? -1)) {
+      const strength = Math.max(car.crash.impact, CRASH_START_STRENGTH);
+      this.debris.impact(car.crash, car.y, new Color(color), strength);
+      if (id === this.focusId) this.chase.jolt(Math.min(0.5, strength * 0.025));
     }
+    this.crashHits.set(id, hits);
   }
 
   private emitDamage(car: CarState, dt: number): void {
-    const wrecked = car.health <= 0;
-    if (car.health >= DAMAGE_STAGES.shed || Math.random() > dt * (wrecked ? 40 : 18)) return;
+    if (car.health >= DAMAGE_STAGES.shed || Math.random() > dt * 18) return;
     const flame = car.health < DAMAGE_STAGES.burning && Math.random() < 0.5;
     const sin = Math.sin(car.yaw);
     const cos = Math.cos(car.yaw);
     this.particles.emit(
       car.x - sin * 1.3,
-      car.y + 1.1,
+      car.y + liftOf(car) + 1.1,
       car.z - cos * 1.3,
       -sin * car.speed * 0.2 + (Math.random() - 0.5),
       1.5 + Math.random(),
@@ -223,7 +233,7 @@ export class GameEngine {
     const speed = Math.abs(car.speed);
     const dusty = !car.onRoad && speed > 4;
     const smoky = car.onRoad && car.slip > 0.25 && speed > 12;
-    if ((!dusty && !smoky) || Math.random() > dt * (dusty ? 70 : 45)) return;
+    if (car.crash || (!dusty && !smoky) || Math.random() > dt * (dusty ? 70 : 45)) return;
     const side = Math.random() < 0.5 ? -1 : 1;
     const sin = Math.sin(car.yaw);
     const cos = Math.cos(car.yaw);

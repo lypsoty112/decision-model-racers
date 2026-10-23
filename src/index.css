@@ -355,6 +355,57 @@ code {
   font-size: 14px;
 }
 
+.finish-panel {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(300px, calc(100% - 32px));
+  padding: 14px 18px;
+  animation: rise 0.4s ease-out both;
+}
+
+.finish-position {
+  color: var(--ink-muted);
+  font-size: 15px;
+}
+
+.finish-position strong {
+  color: var(--ink);
+  font-size: 40px;
+}
+
+.finish-panel dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 14px;
+  margin: 6px 0 10px;
+  font-size: 14px;
+}
+
+.finish-panel dt {
+  color: var(--ink-muted);
+}
+
+.finish-panel dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.finish-panel .muted {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+@keyframes rise {
+  from {
+    transform: translate(-50%, 12px);
+    opacity: 0;
+  }
+}
+
 .hints {
   position: absolute;
   bottom: 10px;
@@ -533,7 +584,8 @@ code {
 }
 
 .menu-title .eyebrow,
-.report-header .eyebrow {
+.report-header .eyebrow,
+.finish-panel .eyebrow {
   margin: 0 0 4px;
   color: var(--accent);
   font-size: 12px;

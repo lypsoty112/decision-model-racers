@@ -7,7 +7,7 @@
  * the race report is open. When the menu selects a different track and no race is paused behind
  * it, the demo restarts on that track PREVIEW_DELAY ms after the last change. `startRace` builds a
  * race from the settings and begins its countdown when `canStart` allows it, on the chase camera
- * when you race and on the TV camera when you spectate; `openMenu` pauses a running race behind
+ * when you race and on the TV camera when you spectate or once you cross the line; `openMenu` pauses a running race behind
  * the menu and `resume` continues it. `App` also owns the stored tournament: while one is running
  * the menu, the demo, and `startRace` use the next round's settings, `startRace` in tournament mode
  * starts a new tournament (a single race drops a finished one), and `openMenu` records a finished
@@ -182,7 +182,7 @@ export default function App() {
       <div className="viewport" ref={viewportRef} />
       {screen === 'race' && (
         <>
-          <Hud race={race} focusId={focusId} cameraMode={cameraMode} onMenu={openMenu} />
+          <Hud race={race} focusId={focusId} cameraMode={cameraMode} onMenu={openMenu} onPlayerFinish={() => setCameraMode('tv')} />
           {cameraMode !== 'overhead' && <Minimap race={race} focusId={focusId} />}
           {telemetryOpen && <Telemetry race={race} focusId={focusId} />}
           {race.phase !== 'finished' && (

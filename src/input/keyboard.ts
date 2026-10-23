@@ -5,9 +5,10 @@
  * returned function removes; it stops arrow keys and Space from scrolling unless the event
  * comes from a form field. `hold` presses or releases a code directly, which is how the
  * on-screen touch buttons drive the same keys. `KeyboardDriver` maps WASD or the arrow keys
- * (Space also brakes) to raw -1/0/1 `Controls`; the car model smooths steering itself.
+ * (Space also brakes) to raw -1/0/1 `Controls`; the car model smooths steering itself. Once the
+ * racer has finished, it hands the car to its `autopilot` for the cool-down.
  */
-import type { Controls, Driver } from '../sim/types';
+import type { Controls, Driver, RacerObservation } from '../sim/types';
 
 const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
 
@@ -45,12 +46,15 @@ export class Keyboard {
 export class KeyboardDriver implements Driver {
   readonly kind = 'human';
   private readonly keyboard: Keyboard;
+  private readonly autopilot: Driver;
 
-  constructor(keyboard: Keyboard) {
+  constructor(keyboard: Keyboard, autopilot: Driver) {
     this.keyboard = keyboard;
+    this.autopilot = autopilot;
   }
 
-  decide(): Controls {
+  decide(observation: RacerObservation, dt: number): Controls {
+    if (observation.finished) return this.autopilot.decide(observation, dt);
     const keys = this.keyboard;
     return {
       throttle: keys.isHeld('KeyW', 'ArrowUp') ? 1 : 0,

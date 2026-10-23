@@ -14,7 +14,8 @@
  * (unset knobs take STYLE_DEFAULTS), or one
  * `ModelDriver` per `ModelEntry` (up to MAX_MODELS entries, at most MAX_COPIES of one model),
  * named "<model> · <style>" with a number added when the same model and style repeat. When
- * `participate` is set, it adds the keyboard racer, and `shuffle` then gives every racer a
+ * `participate` is set, it adds the keyboard racer, with a mid-difficulty bot as the autopilot
+ * that drives its car after the finish, and `shuffle` then gives every racer a
  * random grid slot. `canStart` refuses an empty grid and, while the
  * OpenRouter key is invalid or out of credits, any decision-model race; `lapsFor` caps
  * decision-model races at MODEL_MAX_LAPS. `demoSettings` describes the bots-only race that runs
@@ -159,7 +160,7 @@ export function createRace(settings: RaceSettings, keyboard: Keyboard): Race {
       id: PLAYER_ID,
       name: settings.playerName.trim() || 'You',
       color: settings.playerColor,
-      driver: new KeyboardDriver(keyboard),
+      driver: new KeyboardDriver(keyboard, new BotDriver({ ...STYLE_DEFAULTS, grip: lerp(range.grip, 0.5), pace: lerp(range.pace, 0.5), lane: 0 }, 'Autopilot', Math.random)),
     });
   }
   return new Race(trackFor(settings), shuffle(setups), lapsFor(settings), settings.damage);

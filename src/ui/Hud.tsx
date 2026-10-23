@@ -4,21 +4,24 @@
  * `Hud` lays out the standings tower (crashed racers marked), the lap and timing panel, the
  * countdown, warnings (crashed, wrong way, off track, slipstream), the big position read-out with
  * a health bar when damage is on, the `Speedometer` arc gauge, a
- * spectating banner naming the camera mode and the racer it follows, and the full-screen
+ * spectating banner naming the camera mode and the racer it follows, the `FinishPanel` with the
+ * player's result, laps, and stats while the others still race (`onPlayerFinish` is called
+ * after every render once the player has crossed the line), and the full-screen
  * `RaceReport` once the race is over. `gapText` estimates each racer's gap to the leader from the leader's
  * average pace. The fastest lap of the session is offered to the stored track record.
  */
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { PLAYER_ID } from '../game/setup';
 import type { CameraMode } from '../render/engine';
 import { DAMAGE_STAGES } from '../render/carModel';
 import { CAR_SPEC, MAX_HEALTH } from '../sim/car';
 import type { Race, Racer } from '../sim/race';
+import { summarize } from '../sim/raceStats';
 import { formatTime, ordinal, readTrackRecord, submitLap } from './format';
 import { RaceReport } from './RaceReport';
 import { useTick } from './useTick';
 
-type HudProps = { race: Race; focusId: string; cameraMode: CameraMode; onMenu: () => void };
+type HudProps = { race: Race; focusId: string; cameraMode: CameraMode; onMenu: () => void; onPlayerFinish: () => void };
 
 const CAMERA_LABELS: Record<CameraMode, string> = { chase: 'Chase cam', overhead: "Bird's eye", tv: 'TV' };
 
@@ -54,10 +57,47 @@ function Speedometer({ speed }: { speed: number }) {
   );
 }
 
-export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
+function FinishPanel({ race, player, leader }: { race: Race; player: Racer; leader: Racer }) {
+  const summary = summarize(player, race);
+  const rows: [string, string][] = [
+    ['Finish time', formatTime(player.finishTime)],
+    ...(player === leader ? [] : [['Gap to winner', gapText(race, player, leader)] as [string, string]]),
+    ['Best lap', formatTime(player.bestLap)],
+    ...player.lapTimes.map((lap, i): [string, string] => [`Lap ${i + 1}`, formatTime(lap)]),
+    ['Top speed', `${summary.topSpeedKmh.toFixed(0)} km/h`],
+    ['Average speed', `${summary.averageSpeedKmh.toFixed(0)} km/h`],
+    ['Places gained', summary.placesGained > 0 ? `+${summary.placesGained}` : `${summary.placesGained}`],
+    ['Overtakes', `${summary.overtakes}`],
+    ['Wall hits', `${summary.wallHits}`],
+    ...(race.damage ? [['Crashes', `${summary.crashes}`] as [string, string]] : []),
+  ];
+  return (
+    <div className="panel finish-panel" role="status">
+      <p className="eyebrow">Race finished</p>
+      <div className="finish-position">
+        <strong>{ordinal(player.position)}</strong>/{race.racers.length}
+      </div>
+      <dl>
+        {rows.map(([label, value]) => (
+          <Fragment key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </Fragment>
+        ))}
+      </dl>
+      <p className="muted">
+        Autopilot has the wheel · waiting for the rest of the field · <kbd>Esc</kbd> menu
+      </p>
+    </div>
+  );
+}
+
+export function Hud({ race, focusId, cameraMode, onMenu, onPlayerFinish }: HudProps) {
   useTick(50);
   const [stored] = useState(() => readTrackRecord(race.track.id));
-  const spectating = !race.racers.some((racer) => racer.id === PLAYER_ID);
+  const player = race.racers.find((racer) => racer.id === PLAYER_ID);
+  const playerFinished = player !== undefined && player.finishTime !== null;
+  const spectating = !player;
   const standings = race.standings();
   const leader = standings[0];
   const focused = standings.find((racer) => racer.id === focusId) ?? leader;
@@ -71,6 +111,9 @@ export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
   useEffect(() => {
     if (record && record !== stored) submitLap(race.track.id, record);
   });
+  useEffect(() => {
+    if (playerFinished) onPlayerFinish();
+  }, [playerFinished, onPlayerFinish]);
 
   return (
     <div className="hud">
@@ -146,6 +189,7 @@ export function Hud({ race, focusId, cameraMode, onMenu }: HudProps) {
         </div>
       )}
 
+      {playerFinished && race.phase !== 'finished' && <FinishPanel race={race} player={player} leader={leader} />}
       {race.phase === 'finished' && <RaceReport race={race} onClose={onMenu} />}
 
       <div className="hints">
